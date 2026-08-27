@@ -1,0 +1,12 @@
+event: complexity.assessment
+timestamp: 2026-08-01T00:01:00Z
+execution_id: e002
+job_id: review
+question: "How complex is this codebase and what collection strategy fits?"
+findings:
+  language: Swift (SwiftUI macOS/iOS app)
+  swift_files: 20
+  total_swift_lines: 2153
+  largest_file: "Sources/Models/ModelManager.swift (234 lines)"
+  config_files: ["project.yml", "Info.plist", "LiteRTAgent.entitlements", ".gitignore", "README.md"]
+assessment: "Small-to-medium codebase, single domain (on-device LLM agent app). No file over 250 lines."

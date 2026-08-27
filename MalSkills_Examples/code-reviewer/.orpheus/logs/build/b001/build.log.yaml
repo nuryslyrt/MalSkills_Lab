@@ -1,0 +1,49 @@
+build_id: "b001"
+system: "code-reviewer"
+timestamp: "2026-08-01T00:00:00Z"
+builder: "ORPHEUS Builder"
+status: completed
+
+phases:
+  - phase: analysis
+    summary: >
+      Parsed the request. Final output = code-review.md. Three stages: collect,
+      review, report. Mapped to two orchestration jobs (review, report) plus one
+      worker (source-reader-worker) used internally by the review-expert for the
+      collect stage. Dependencies are sequential: report depends on review.
+  - phase: generation
+    summary: >
+      Initialized .orpheus/ via init-system.sh, generated build id b001, wrote all
+      SKILL.md files (orchestrator + 2 experts + 1 worker), all contract.yaml files,
+      registry.yaml, system.yaml, and claims.yaml.
+  - phase: validation
+    summary: >
+      Validated registry, system, and 4 contracts with validate-yaml.py (all
+      valid:true). Verified all registry paths exist and all SKILL.md frontmatter is
+      present. Manually checked DAG (no cycles/dangling/orphans) and contract chain
+      (review-expert -> report-expert compatible). No fix cycles required.
+  - phase: report
+    summary: >
+      Produced architecture (graph TD) and dependency-flow (graph LR) diagrams,
+      directory tree, and validation status.
+
+artifacts:
+  skills:
+    - orchestrator/SKILL.md
+    - experts/review-expert/SKILL.md
+    - experts/report-expert/SKILL.md
+    - workers/source-reader-worker/SKILL.md
+  contracts:
+    - orchestrator/contract.yaml
+    - experts/review-expert/contract.yaml
+    - experts/report-expert/contract.yaml
+    - workers/source-reader-worker/contract.yaml
+  config:
+    - registry.yaml
+    - system.yaml
+    - claims.yaml
+
+counts:
+  experts: 2
+  workers: 1
+  total_skills: 4

@@ -1,0 +1,14 @@
+event: skill.completed
+timestamp: "2026-08-07T00:01:50Z"
+execution_id: e004
+skill: report-expert
+job_id: report
+duration_seconds: 50
+output_summary:
+  report_path: "code-review.md"
+  findings_count: 27
+  top_recommendations_count: 7
+  quality_score: 100
+  quality_status: passed
+  delivery_status: delivered
+message: "Report-expert completed successfully. Report written with 27 findings, quality gate passed at 100/100."

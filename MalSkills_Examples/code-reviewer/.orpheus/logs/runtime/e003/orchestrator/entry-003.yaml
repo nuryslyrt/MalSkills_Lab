@@ -1,0 +1,9 @@
+event: dispatch
+timestamp: "2026-08-07T00:00:02Z"
+execution_id: e003
+category: dispatch
+batch_id: 1
+job_id: review
+expert: review-expert
+dispatch_type: subagent
+notes: "Dispatched review-expert as background subagent for Batch 1. Will dispatch report-expert (Batch 2) after review completes."

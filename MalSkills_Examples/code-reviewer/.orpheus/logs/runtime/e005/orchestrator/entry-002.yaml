@@ -1,0 +1,18 @@
+event: job.completed
+timestamp: "2026-08-08T00:06:00Z"
+execution_id: e005
+job_id: review
+expert: review-expert
+status: completed
+duration_seconds: 351
+output_summary:
+  findings_count: 20
+  critical: 1
+  high: 2
+  medium: 8
+  low: 6
+  info: 3
+  files_reviewed: 14
+decision:
+  description: "Batch 1 (review) completed successfully. Proceeding to dispatch Batch 2 (report)."
+  reasoning: "Review results contain all required fields (findings, structure_overview, files_reviewed). Contract satisfied."

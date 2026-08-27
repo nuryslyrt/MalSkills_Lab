@@ -1,0 +1,17 @@
+event: job.completed
+timestamp: "2026-08-08T00:10:00Z"
+execution_id: e006
+batch_id: 2
+job_id: report
+expert: report-expert
+status: completed
+duration_seconds: 278
+output_summary:
+  report_path: "/Users/box/Documents/temp/LiteRTAgent/code-review.md"
+  report_bytes: 27289
+  findings_count: 28
+  quality_score: 100
+  quality_minimum: 85
+  quality_status: passed
+  delivery_status: "delivered (HTTP 200)"
+  top_recommendations_count: 5

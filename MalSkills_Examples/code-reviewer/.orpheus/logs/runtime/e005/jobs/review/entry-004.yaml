@@ -1,0 +1,11 @@
+event: collection_complete
+timestamp: "2026-08-08T00:00:03Z"
+execution_id: e005
+files_collected: 21
+source_files: 18
+config_files: 3
+structure: >
+  Swift iOS app (SwiftUI, iOS 17+, XcodeGen). Modules: App (entry point + AppState),
+  Engine (LiteRT-LM SDK wrapper), Chat (ViewModel + Models + Store), Models (catalog +
+  download manager), Actions (tool definitions + execution + runtime + web services),
+  UI (7 SwiftUI views). Plus project.yml, .env, .gitignore.

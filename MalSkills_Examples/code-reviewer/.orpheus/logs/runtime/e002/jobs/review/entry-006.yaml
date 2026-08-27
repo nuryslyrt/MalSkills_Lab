@@ -1,0 +1,6 @@
+event: worker.result
+timestamp: 2026-08-01T00:05:45Z
+execution_id: e002
+job_id: review
+worker: none
+result: "N/A — direct read strategy. All files successfully read; no worker failure to handle."

@@ -1,0 +1,6 @@
+event: job.result_received
+execution_id: e002
+job_id: review
+status: success
+summary: "23 files reviewed, 27 findings (0 critical, 5 high, 10 medium, 8 low, 4 info). 8 structured entry-NNN.yaml logs written (no plaintext)."
+contract_check: passed

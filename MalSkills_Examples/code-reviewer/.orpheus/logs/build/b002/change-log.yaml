@@ -1,0 +1,73 @@
+change_id: b002
+timestamp: "2026-08-01"
+operation: modify_contract
+target: report-expert
+requested_by: meta-orchestrator (user pre-approved)
+original_request: >
+  Wire review-expert's files_reviewed field into the report (user-selected
+  resolution for the audit a001 tool_contract_soundness advisory).
+
+assessment_summary: >
+  Contract chain review-expert -> report-expert. review-expert produces
+  findings, structure_overview, files_reviewed. report-expert consumed
+  findings + structure_overview (+ optional summary) but did NOT declare or
+  consume files_reviewed, leaving that producer output unconsumed and tripping
+  the tool_contract_soundness advisory from audit a001.
+
+change_plan:
+  - "report-expert/contract.yaml: add files_reviewed as OPTIONAL input (array)."
+  - "report-expert/SKILL.md: update Contract Summary input line."
+  - "report-expert/SKILL.md: Execution step 1 reads files_reviewed from review.yaml."
+  - "report-expert/SKILL.md: add 'Files Reviewed' section to report structure (count + list, omit when absent)."
+  - "report-expert/SKILL.md: add Quality Gate checkbox for the new section."
+  - "Do NOT modify review-expert. Do NOT touch Logging Protocol sections."
+
+files_modified:
+  - .orpheus/experts/report-expert/contract.yaml
+  - .orpheus/experts/report-expert/SKILL.md
+files_created: []
+files_deleted: []
+
+changes_made:
+  - "Added optional input files_reviewed (array of assessed file paths) to report-expert contract."
+  - "Updated report-expert SKILL.md Contract Summary to list optional files_reviewed."
+  - "Updated Execution Protocol step 1 to read files_reviewed (optional, empty-safe) from review.yaml."
+  - "Added a 'Files Reviewed' section (count + scannable list) to the code-review.md structure; omitted when files_reviewed absent/empty."
+  - "Added a Quality Gate checkbox verifying the Files Reviewed section renders/omits correctly."
+
+validation_result:
+  dag_valid: true
+  contracts_valid: true
+  registry_valid: true
+  issues: []
+  notes: >
+    review-expert.output (findings, structure_overview, files_reviewed,
+    findings_count, summary) superset of report-expert.input. New field is
+    optional, so no new required dependency was introduced: backward-compatible.
+    No orphaned references; routing still covers review-expert and report-expert.
+
+decisions:
+  - question: "Which claims are affected/renewable by this change?"
+    options_considered:
+      - "tool_contract_soundness only"
+      - "tool_contract_soundness plus dag_acyclicity"
+      - "no claims affected"
+    chosen: "tool_contract_soundness only"
+    reasoning: >
+      Only a contract.yaml (and its SKILL.md prose) changed. renewal_trigger
+      for tool_contract_soundness is 'Any contract.yaml modified' — satisfied.
+      No DAG edges/nodes changed, so structural claims like dag_acyclicity are
+      not re-triggered. The change actually resolves the a001 advisory by making
+      files_reviewed a consumed field.
+    confidence: high
+
+claims_affected:
+  - id: tool_contract_soundness
+    effect: "contract modified; advisory resolved (files_reviewed now consumed)"
+    recommendation: "Re-run the Auditor to renew evidence and clear the a001 advisory."
+
+diff_summary: >
+  report-expert now declares and consumes review-expert's files_reviewed as an
+  optional input and renders a 'Files Reviewed' section (count + scannable list)
+  in code-review.md, omitted when the field is absent/empty. review-expert
+  unchanged. Backward-compatible. Closes the a001 tool_contract_soundness advisory.

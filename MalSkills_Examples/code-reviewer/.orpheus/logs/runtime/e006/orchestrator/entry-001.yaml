@@ -1,0 +1,10 @@
+event: execution.started
+timestamp: "2026-08-08T00:00:00Z"
+execution_id: e006
+system: code-reviewer
+request: "run code-reviewer for /Users/box/Documents/temp/LiteRTAgent"
+user_context:
+  original_request: "run code-reviewer for /Users/box/Documents/temp/LiteRTAgent"
+  constraints: []
+  preferences: []
+  target_scope: "/Users/box/Documents/temp/LiteRTAgent"

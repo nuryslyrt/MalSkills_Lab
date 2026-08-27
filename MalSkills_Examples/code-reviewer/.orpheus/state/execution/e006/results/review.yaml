@@ -1,0 +1,622 @@
+job_id: review
+status: completed
+expert: review-expert
+execution_id: e006
+timestamp: "2026-08-08T00:06:00Z"
+
+structure_overview: |
+  LiteRTAgent is a SwiftUI iOS application that runs on-device LLMs (primarily
+  Gemma 4) via Google's LiteRT-LM SDK to provide an agent capable of calling
+  iOS device APIs (messaging, calendar, maps, web search, etc.) through a
+  tool-calling interface. The project is organized into five modules:
+
+  **App** (1 file) -- Entry point (`LiteRTAgentApp`). Houses `AppState`, an
+  `ObservableObject` that owns the `LiteRTEngine` lifecycle and agent
+  configuration. Handles backend fallback logic (GPU -> CPU) and simulator
+  detection.
+
+  **UI** (7 files) -- SwiftUI views. `ContentView` is the root `TabView`.
+  `ChatTab` manages load state and navigation. `ChatView` displays the
+  conversation and an input bar. `ModelsView` shows downloadable model
+  specs. `SettingsView` manages backend, API keys, and HuggingFace token.
+  `ConfigView` is a live "test bench" for system prompt, sampling, and
+  engine parameters. `HistoryView` lets users browse and restore saved
+  chats. `SkillsView` exposes toggles for each tool the model can call.
+
+  **Chat** (3 files) -- Data models (`ChatMessage`, `ChatSession`) and
+  persistence (`ChatStore` -- one JSON file per session in Application
+  Support/Chats). `ChatViewModel` bridges the UI to the engine's streaming
+  API and persists transcripts.
+
+  **Models** (2 files) -- `ModelCatalog` defines available model specs.
+  `ModelManager` handles downloading `.litertlm` files from HuggingFace,
+  including API-driven filename resolution, progress tracking, and
+  delegate-based large-file downloads. `AgentSettings` (in ModelCatalog.swift)
+  is the user-editable agent configuration persisted via UserDefaults.
+
+  **Actions** (6 files) -- The tool-calling layer. `DeviceAction` is an enum
+  of all executable actions. `ActionTools` wraps each action as a LiteRT-LM
+  `Tool` struct. `ActionRuntime` is the shared bridge between SDK tool
+  invocations and `ActionExecutor`, adding user-confirmation gating and
+  history logging. `ActionExecutor` implements each action via Apple APIs
+  (EventKit, MessageUI, MapKit, UIApplication). `SkillCatalog` provides
+  metadata for the Skills UI. `WebServices` implements a fallback-chain
+  web search (Tavily -> Serper -> DuckDuckGo) and page fetching (Jina Reader).
+
+  **Engine** (1 file) -- `LiteRTEngine`, an actor wrapping the LiteRT-LM SDK.
+  Manages model loading, conversation configuration, and streaming generation.
+  Enables constrained decoding for reliable tool-call formatting.
+
+  **Build** -- XcodeGen-based (`project.yml`). Targets iOS 17+, Swift 5.9.
+  Depends on LiteRT-LM via SwiftPM (pinned to a specific revision).
+  Requests increased memory entitlement for multi-GB model loading.
+
+files_reviewed:
+  - Sources/App/LiteRTAgentApp.swift
+  - Sources/UI/ContentView.swift
+  - Sources/UI/ChatView.swift
+  - Sources/UI/ModelsView.swift
+  - Sources/UI/SettingsView.swift
+  - Sources/UI/ConfigView.swift
+  - Sources/UI/HistoryView.swift
+  - Sources/UI/SkillsView.swift
+  - Sources/Chat/ChatViewModel.swift
+  - Sources/Chat/ChatModels.swift
+  - Sources/Chat/ChatStore.swift
+  - Sources/Models/ModelCatalog.swift
+  - Sources/Models/ModelManager.swift
+  - Sources/Actions/ActionTools.swift
+  - Sources/Actions/DeviceAction.swift
+  - Sources/Actions/ActionRuntime.swift
+  - Sources/Actions/SkillCatalog.swift
+  - Sources/Actions/ActionExecutor.swift
+  - Sources/Actions/WebServices.swift
+  - Sources/Engine/LiteRTEngine.swift
+
+findings_count: 28
+
+summary: |
+  Overall the codebase is well-structured, clearly documented, and shows a
+  mature understanding of SwiftUI, structured concurrency, and iOS platform
+  APIs. The architecture cleanly separates concerns: UI / Chat logic / Model
+  management / Action execution / Engine wrapper. Code is consistently
+  formatted with helpful inline comments explaining non-obvious design
+  decisions (e.g., snake_case naming to match SDK round-tripping, constrained
+  decoding rationale, session lifecycle).
+
+  The most significant issues are: (1) a security concern with API keys and
+  the HuggingFace token stored in plaintext UserDefaults rather than Keychain,
+  (2) several instances of silent error swallowing that could make debugging
+  difficult, (3) a potential data-integrity issue in the model download flow
+  where the existing file is deleted before the replacement download completes,
+  (4) an unbounded in-memory action history, and (5) repeated allocation of
+  expensive ISO8601DateFormatter objects. There are no critical bugs, but
+  several medium-severity issues that should be addressed before production.
+
+findings:
+  # ── Security / Best-Practice ──────────────────────────────────────────
+
+  - file: Sources/Models/ModelManager.swift
+    line: 21
+    category: best-practice
+    severity: high
+    description: >
+      The HuggingFace access token is stored in plaintext UserDefaults. On a
+      jailbroken device or via an iTunes backup, this token is trivially
+      extractable. HuggingFace tokens grant read (and potentially write)
+      access to the user's HF account and private repos.
+    suggested_fix: >
+      Store the token in the iOS Keychain using Security framework or a thin
+      wrapper like KeychainAccess. Replace the UserDefaults read/write in the
+      `hfToken` property with Keychain get/set calls:
+        @Published var hfToken: String = Keychain.get("hfToken") ?? "" {
+            didSet { Keychain.set(hfToken, forKey: "hfToken") }
+        }
+
+  - file: Sources/UI/SettingsView.swift
+    line: 8
+    category: best-practice
+    severity: high
+    description: >
+      Web service API keys (Tavily, Serper, Jina) are stored via @AppStorage
+      which uses UserDefaults -- same plaintext exposure as the HF token.
+      These are paid API keys with monetary value.
+    suggested_fix: >
+      Move API key storage to the Keychain. Replace @AppStorage bindings with
+      custom Bindings backed by a Keychain wrapper. WebServices.key() should
+      read from Keychain instead of UserDefaults.
+
+  # ── Bug / Edge-Case ──────────────────────────────────────────────────
+
+  - file: Sources/Models/ModelManager.swift
+    line: 138
+    category: bug
+    severity: high
+    description: >
+      In downloadFile(), the existing file at `dest` is deleted (line 138)
+      before the new download begins. If the download subsequently fails
+      (network error, disk full, etc.), the user loses the previously
+      downloaded model with no way to recover it except re-downloading.
+      For multi-GB model files on cellular or slow connections, this is a
+      significant data-loss risk.
+    suggested_fix: >
+      Download to a temporary location first, then atomically replace the
+      existing file only after the download succeeds:
+        let tempDest = dest.appendingPathExtension("download")
+        // ... download to tempDest ...
+        if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
+        try fm.moveItem(at: tempURL, to: dest)
+
+  - file: Sources/UI/ChatView.swift
+    line: 19
+    category: bug
+    severity: medium
+    description: >
+      `.onChange(of: viewModel.messages.last?.text)` triggers auto-scroll
+      only when the last message's *text* changes. When a new message is
+      appended whose text happens to equal the previous last message's text
+      (e.g., two identical user messages, or "(done)" appearing twice), the
+      onChange will not fire and the scroll will not happen. This is a subtle
+      edge case but can cause the chat to appear stuck.
+    suggested_fix: >
+      Track the message count or the last message's ID instead of its text:
+        .onChange(of: viewModel.messages.count) {
+            if let last = viewModel.messages.last {
+                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+            }
+        }
+
+  - file: Sources/Chat/ChatViewModel.swift
+    line: 59
+    category: bug
+    severity: medium
+    description: >
+      The streaming Task in send() captures `self` strongly. When the user
+      switches to a different chat session (ContentView rebuilds the
+      ChatViewModel via .id(chatStore.currentSessionID)), the old
+      ChatViewModel may be mid-generation. The orphaned Task continues to
+      run, consuming engine resources and potentially appending to a stale
+      `messages` array. There is no cancellation mechanism.
+    suggested_fix: >
+      Store the Task and cancel it when the view model is deallocated or when
+      the session changes:
+        private var generationTask: Task<Void, Never>?
+        func send(_ text: String) {
+            // ...
+            generationTask = Task { ... }
+        }
+        deinit { generationTask?.cancel() }
+      Also check `Task.isCancelled` inside the streaming loop to stop early.
+
+  - file: Sources/Actions/ActionRuntime.swift
+    line: 17
+    category: bug
+    severity: medium
+    description: >
+      The `history` array is append-only with no pruning. In a long session
+      with many tool invocations, this grows unbounded in memory. Each
+      ActionRecord contains string data (skill, summary, detail). While
+      unlikely to cause an OOM on its own, it adds to the already tight
+      memory budget imposed by multi-GB model loading.
+    suggested_fix: >
+      Add a maximum capacity and trim old entries when exceeded:
+        private let maxHistory = 200
+        @MainActor private func record(...) {
+            history.append(ActionRecord(...))
+            if history.count > maxHistory { history.removeFirst(history.count - maxHistory) }
+        }
+
+  - file: Sources/Actions/ActionExecutor.swift
+    line: 137
+    category: bug
+    severity: medium
+    description: >
+      openMapsSearch() uses the callback-based MKLocalSearch.start() API and
+      returns .launched("Opening Maps...") immediately before the search
+      completes. If the search finds no results, the fallback URL is opened
+      inside the callback, but the model has already received the "launched"
+      result. This mismatch means the model cannot know whether the search
+      succeeded or fell back. More importantly, errors in the callback
+      (e.g., network failure) are silently ignored.
+    suggested_fix: >
+      Convert to async/await using MKLocalSearch's async start() method
+      (available since iOS 16) so the result accurately reflects what happened:
+        private func openMapsSearch(_ query: String) async -> Result {
+            let req = MKLocalSearch.Request()
+            req.naturalLanguageQuery = query
+            do {
+                let response = try await MKLocalSearch(request: req).start()
+                if let item = response.mapItems.first {
+                    item.openInMaps()
+                    return .launched("Opened Maps for \"\(query)\".")
+                }
+            } catch { /* fall through to URL fallback */ }
+            let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            UIApplication.shared.open(URL(string: "http://maps.apple.com/?q=\(q)")!)
+            return .launched("Opening Maps for \"\(query)\" (via URL fallback).")
+        }
+
+  - file: Sources/UI/ContentView.swift
+    line: 35
+    category: bug
+    severity: low
+    description: >
+      Force-unwrap of appState.engine! is guarded by the pattern match
+      `.ready where appState.engine != nil`, but if the load state is mutated
+      to .ready on another path without setting engine (a future code change),
+      this crashes. The guard is implicit and separated from the usage.
+    suggested_fix: >
+      Use an if-let binding to avoid the force-unwrap:
+        case .ready:
+            if let engine = appState.engine {
+                VStack(spacing: 0) {
+                    backendBanner
+                    ChatView(viewModel: ChatViewModel(engine: engine, store: chatStore))
+                        .id(chatStore.currentSessionID)
+                }
+            }
+
+  - file: Sources/Actions/ActionExecutor.swift
+    line: 205
+    category: bug
+    severity: low
+    description: >
+      FlexibleISO.date(from:) allocates two new ISO8601DateFormatter
+      instances on every call. These are expensive objects. For calendar event
+      and reminder creation, this is called at least once per action, and the
+      formatters are immediately discarded.
+    suggested_fix: >
+      Use static cached formatters:
+        enum FlexibleISO {
+            private static let withFraction: ISO8601DateFormatter = {
+                let f = ISO8601DateFormatter()
+                f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                return f
+            }()
+            private static let plain: ISO8601DateFormatter = {
+                let f = ISO8601DateFormatter()
+                f.formatOptions = [.withInternetDateTime]
+                return f
+            }()
+            static func date(from string: String) -> Date? {
+                withFraction.date(from: string) ?? plain.date(from: string)
+            }
+        }
+
+  # ── Readability / Style ──────────────────────────────────────────────
+
+  - file: Sources/Models/ModelManager.swift
+    line: 27
+    category: readability
+    severity: low
+    description: >
+      The `tasks` dictionary (line 27: `private var tasks: [String:
+      URLSessionDownloadTask] = [:]`) is declared but never written to or
+      read anywhere in the class. This is dead code that may confuse
+      readers about download task lifecycle management.
+    suggested_fix: >
+      Remove the unused property:
+        // DELETE: private var tasks: [String: URLSessionDownloadTask] = [:]
+
+  - file: Sources/Actions/WebServices.swift
+    line: 140
+    category: readability
+    severity: low
+    description: >
+      In fetchWebpage(), a `target` URL is created on line 137 from the
+      normalized URL string, but is immediately discarded on line 140
+      (`_ = target`). This looks like a leftover from validation logic that
+      was refactored.
+    suggested_fix: >
+      Remove the unused variable. The URL(string:) guard on readerURL is
+      sufficient validation:
+        guard let readerURL = URL(string: "https://r.jina.ai/\(normalized)") else {
+            return Outcome(text: "Invalid URL: \(rawURL)", failed: true)
+        }
+
+  - file: Sources/Chat/ChatViewModel.swift
+    line: 37
+    category: readability
+    severity: info
+    description: >
+      The Combine sink closure (lines 33-46) uses emoji literals for status
+      icons. While functional, this mixes presentation concerns into the
+      view model. If the icon style needs to change, this view-model code
+      must be updated.
+    suggested_fix: >
+      Extract icon mapping to a computed property on ActionRecord.Status:
+        extension ActionRecord.Status {
+            var icon: String {
+                switch self {
+                case .done: return "checkmark.circle.fill"
+                case .failed: return "exclamationmark.triangle.fill"
+                case .cancelled: return "xmark.circle.fill"
+                }
+            }
+        }
+      Then use SF Symbols in the UI layer where the action bubble is rendered.
+
+  - file: Sources/UI/ConfigView.swift
+    line: 63
+    category: readability
+    severity: info
+    description: >
+      The "Applied" button label uses a unicode checkmark character
+      ("Applied ✓") rather than an SF Symbol, which is inconsistent with
+      the rest of the app's icon usage.
+    suggested_fix: >
+      Use Label with an SF Symbol for consistency:
+        Button { ... } label: {
+            Label(applied ? "Applied" : "Apply",
+                  systemImage: applied ? "checkmark.circle.fill" : "arrow.right.circle")
+        }.bold()
+
+  - file: Sources/Actions/ActionRuntime.swift
+    line: 9
+    category: readability
+    severity: info
+    description: >
+      ActionRuntime is a class (not struct/enum) with @Published properties
+      and @MainActor methods, but the class itself is not annotated with
+      @MainActor. Instead, individual methods are selectively annotated.
+      This makes it harder to reason about thread safety and is inconsistent
+      with AppState, ChatStore, and ChatViewModel which are all @MainActor.
+    suggested_fix: >
+      Mark the entire class @MainActor for clarity and consistency:
+        @MainActor
+        final class ActionRuntime: ObservableObject { ... }
+      Then remove the per-method @MainActor annotations since they become
+      redundant. The `perform()` method's async operations already use
+      `await` to hop to MainActor-isolated methods.
+
+  - file: Sources/Models/ModelCatalog.swift
+    line: 36
+    category: readability
+    severity: info
+    description: >
+      `ModelCatalog.all` is just an alias for `orchestrators` with no
+      additional entries. This indirection serves no current purpose and
+      adds a level of abstraction readers must mentally resolve.
+    suggested_fix: >
+      Either remove `all` and use `orchestrators` directly, or add a
+      comment indicating this is intentionally a future extension point:
+        /// All known models. Currently only orchestrators; future releases
+        /// may add specialized models (e.g. embedding, vision).
+        static let all: [ModelSpec] = orchestrators
+
+  # ── Complexity / Maintainability ─────────────────────────────────────
+
+  - file: Sources/App/LiteRTAgentApp.swift
+    line: 40
+    category: complexity
+    severity: medium
+    description: >
+      AppState.loadAgent() is 52 lines long and handles simulator detection,
+      backend fallback iteration, error accumulation, engine initialization,
+      conversation configuration, and state updates. Mixing platform-specific
+      conditional compilation (#if targetEnvironment) with retry logic makes
+      the method hard to follow and test.
+    suggested_fix: >
+      Extract the backend resolution into a separate method:
+        private func resolveBackends(requested: LiteRTBackend) -> (backends: [LiteRTBackend], note: String?) {
+            #if targetEnvironment(simulator)
+            let note = requested == .gpu
+                ? "GPU (Metal) isn't available in the Simulator -- running on CPU."
+                : nil
+            return ([.cpu], note)
+            #else
+            return (requested == .gpu ? [.gpu, .cpu] : [.cpu], nil)
+            #endif
+        }
+      This makes loadAgent() shorter and the platform logic independently testable.
+
+  - file: Sources/Actions/ActionExecutor.swift
+    line: 23
+    category: complexity
+    severity: medium
+    description: >
+      ActionExecutor.run() is a single 27-case switch that routes every
+      DeviceAction to its implementation. As more actions are added, this
+      file will grow linearly. At 213 lines it is already the largest file
+      in the project.
+    suggested_fix: >
+      Consider a protocol-based dispatch pattern where each DeviceAction
+      case is handled by a dedicated handler conforming to an ActionHandler
+      protocol. Alternatively, group related cases into extension blocks
+      (communication, eventkit, maps, web) in separate files to keep each
+      focused and under ~100 lines.
+
+  - file: Sources/Actions/WebServices.swift
+    line: 30
+    category: complexity
+    severity: low
+    description: >
+      The search() method builds its provider chain dynamically, iterates
+      with fallback, and accumulates notes -- all in one 24-line method.
+      Adding a new provider requires modifying this method's body, the
+      Keys enum, and the Settings UI.
+    suggested_fix: >
+      Define a SearchProvider protocol with `name`, `isAvailable`, and
+      `search(query:)` members. Register providers in a static array.
+      This makes adding a provider a single-file addition.
+
+  - file: Sources/Chat/ChatStore.swift
+    line: 62
+    category: complexity
+    severity: info
+    description: >
+      The static `dir` computed property creates the directory on every
+      access. While harmless (createDirectory with withIntermediateDirectories
+      is a no-op if the dir exists), it adds unnecessary filesystem calls
+      on every save/load operation.
+    suggested_fix: >
+      Use a lazy static property so the directory is created once:
+        private static let dir: URL = {
+            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Chats", isDirectory: true)
+            try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+            return base
+        }()
+
+  # ── Best-Practice ────────────────────────────────────────────────────
+
+  - file: Sources/Chat/ChatStore.swift
+    line: 74
+    category: best-practice
+    severity: medium
+    description: >
+      Multiple error paths silently swallow failures with `try?`: encoding
+      a session (line 74), writing to disk (line 75), and decoding saved
+      sessions (line 84). If the disk is full or a session file is corrupted,
+      the user gets no feedback and data may silently fail to persist.
+    suggested_fix: >
+      At minimum, log errors to os.Logger so they appear in Console.app
+      during debugging:
+        import os
+        private static let logger = Logger(subsystem: "com.example.LiteRTAgent", category: "ChatStore")
+
+        private func save(_ session: ChatSession) {
+            do {
+                let data = try JSONEncoder().encode(session)
+                try data.write(to: Self.fileURL(for: session.id), options: .atomic)
+            } catch {
+                Self.logger.error("Failed to save session \(session.id): \(error.localizedDescription)")
+            }
+        }
+
+  - file: Sources/Models/ModelManager.swift
+    line: 74
+    category: best-practice
+    severity: medium
+    description: >
+      The save() method in AgentSettings (in ModelCatalog.swift, line 82)
+      and the download error path in ModelManager silently discard encoding/
+      IO errors with `try?`. If settings fail to save, the user's
+      configuration changes are lost without any indication.
+    suggested_fix: >
+      Use do/catch with os.Logger for diagnostics, or surface the error in
+      the UI:
+        func save() {
+            do {
+                let data = try JSONEncoder().encode(self)
+                UserDefaults.standard.set(data, forKey: AgentSettings.key)
+            } catch {
+                Logger.settings.error("Failed to save settings: \(error)")
+            }
+        }
+
+  - file: Sources/Actions/ActionExecutor.swift
+    line: 170
+    category: best-practice
+    severity: medium
+    description: >
+      normalizeURL() uses a simple prefix check to decide whether to prepend
+      "https://". It does not handle inputs with spaces, special characters,
+      or malformed schemes (e.g. "ftp:example.com"). This could cause
+      UIApplication.open to fail silently or open unexpected URLs.
+    suggested_fix: >
+      Add URL encoding for the input and validate the result:
+        private func normalizeURL(_ s: String) -> String {
+            let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            let withScheme = (trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://")
+                              || trimmed.contains("://")) ? trimmed : "https://\(trimmed)"
+            return withScheme.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+                   ?? withScheme
+        }
+
+  - file: Sources/Actions/ActionExecutor.swift
+    line: 182
+    category: best-practice
+    severity: low
+    description: >
+      topViewController() traverses the view controller hierarchy by
+      checking `presentedViewController`. This is a common pattern but
+      fragile: it depends on UIKit's presentation stack being linear, may
+      not work correctly with UIKit/SwiftUI hybrid navigation (e.g.,
+      NavigationStack with sheets), and breaks if multiple windows are
+      active (iPad multitasking, external display).
+    suggested_fix: >
+      Consider using a dedicated "presenter" pattern where the ActionExecutor
+      receives a reference to the presenting UIViewController via dependency
+      injection, or use UIKit's rootViewController directly since the app
+      has a single-window SwiftUI layout. For robustness:
+        private func present(_ vc: UIViewController) {
+            guard let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }),
+                  let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController
+            else { return }
+            var top = root
+            while let presented = top.presentedViewController { top = presented }
+            top.present(vc, animated: true)
+        }
+
+  - file: Sources/Actions/ActionExecutor.swift
+    line: 193
+    category: best-practice
+    severity: low
+    description: >
+      The MFMessageComposeViewControllerDelegate and
+      MFMailComposeViewControllerDelegate implementations use
+      `MainActor.assumeIsolated` which is an assertion, not a guarantee.
+      While UIKit does call delegates on the main thread, using
+      `assumeIsolated` in production code means a crash (not just undefined
+      behavior) if the assumption is ever violated.
+    suggested_fix: >
+      Use `MainActor.run` for safety, or acknowledge the trade-off with a
+      comment. Alternatively, since iOS 17 is the deployment target, consider
+      marking the delegate methods with @MainActor using the nonisolated
+      override approach that is standard in Swift 6 concurrency:
+        nonisolated func messageComposeViewController(...) {
+            Task { @MainActor in controller.dismiss(animated: true) }
+        }
+      Note: Task dispatch adds a frame of delay but is safe in all scenarios.
+
+  - file: Sources/Engine/LiteRTEngine.swift
+    line: 49
+    category: best-practice
+    severity: low
+    description: >
+      The engine cache directory is set to NSTemporaryDirectory(). The
+      system may clean this directory at any time (e.g., under storage
+      pressure), potentially invalidating engine caches mid-session and
+      causing unexpected re-computation.
+    suggested_fix: >
+      Use Application Support or Caches directory for more predictable
+      lifecycle:
+        cacheDir: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("LiteRTEngine").path
+      The Caches directory is still system-purgeable but is less aggressively
+      cleaned than tmp.
+
+  - file: Sources/UI/SkillsView.swift
+    line: 17
+    category: best-practice
+    severity: info
+    description: >
+      "Enable all" and "Disable all" buttons modify settings.enabledSkills
+      but do not call settings.save(). The change is only persisted when the
+      user explicitly taps "Apply" in the toolbar. This is likely intentional
+      (matching the Apply-to-persist pattern) but could surprise users who
+      toggle all skills and then navigate away.
+    suggested_fix: >
+      Either auto-save on toggle (matching the SettingsView pattern) or add
+      a visual indicator that unsaved changes exist. If intentional, add a
+      code comment explaining the design decision.
+
+  - file: Sources/Actions/ActionTools.swift
+    line: 134
+    category: best-practice
+    severity: info
+    description: >
+      The `allTools` array instantiates every Tool struct eagerly at static
+      init time, even though only the enabled subset is ever used. For 11
+      lightweight structs this is negligible, but the pattern does not scale
+      if tools become heavier (e.g., holding resources).
+    suggested_fix: >
+      This is fine for the current scale. If tools become heavier, consider
+      lazy instantiation:
+        static func tools(enabled: Set<String>) -> [Tool] {
+            enabled.compactMap { name in toolFactory[name]?() }
+        }
+      where toolFactory maps names to closures.

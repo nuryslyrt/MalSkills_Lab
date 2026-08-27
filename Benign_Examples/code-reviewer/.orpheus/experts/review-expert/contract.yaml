@@ -1,0 +1,37 @@
+name: "review-expert"
+version: "1.0.0"
+
+input:
+  required:
+    project_path:
+      type: string
+      description: "Path to the project directory to review."
+  optional:
+    focus_areas:
+      type: array
+      description: "Quality dimensions to emphasize during analysis (e.g., security, performance)."
+    include_globs:
+      type: array
+      description: "Glob patterns for files to include in the review."
+    exclude_globs:
+      type: array
+      description: "Glob patterns for files/directories to exclude from the review."
+
+output:
+  required:
+    findings:
+      type: array
+      description: "Array of finding objects, each {file, line, category, severity, description, suggested_fix}."
+    structure_overview:
+      type: string
+      description: "Description of the project's structure and key modules/responsibilities."
+    files_reviewed:
+      type: array
+      description: "List of relative file paths that were assessed."
+  optional:
+    findings_count:
+      type: number
+      description: "Total number of findings produced."
+    summary:
+      type: string
+      description: "Brief overall assessment of the code's quality and health."

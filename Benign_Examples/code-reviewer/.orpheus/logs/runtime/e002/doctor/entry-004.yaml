@@ -1,0 +1,20 @@
+event: diagnosis_decision
+timestamp: 2026-08-01T00:03:00Z
+execution_id: e002
+skill: orpheus-doctor
+category: decision
+level: info
+question: "What is the root-cause category of the e002 log-assembly TypeError, and who should fix it?"
+options_considered:
+  - option: "transient — retry the assembly"
+    rejected_because: "Failure is deterministic; re-running the exact command reproduces the identical traceback every time. Not environment/timing related."
+  - option: "behavioral — fix an expert's SKILL.md logging so it emits timestamps"
+    rejected_because: "The mixed naive/aware data is a legitimate state the assembler must tolerate; orchestrator entries intentionally have no timestamp. Patching every producer is fragile and would not fix the assembler's inability to sort absent-timestamp entries. Also out of the reported scope (fix the assembler)."
+  - option: "structural — escalate to Surgeon"
+    rejected_because: "No skill/contract/dependency change is required. This is a localized bug inside an existing system script, not a topology change. Out of Surgeon scope."
+  - option: "configuration — system setup / script defect: fix the assembler's timestamp handling"
+    chosen: true
+    reasoning: "The defect is a deterministic Python bug in the system's own assemble-logs.py: get_ts() returns a naive datetime.min fallback while parsed '...Z' timestamps are offset-aware, so sorted() raises. This is squarely the 'configuration — system setup issue (broken script)' category and within Doctor scope. Fix: normalize all timestamps to timezone-aware UTC and make the fallback offset-aware so all three cases (absent, aware, naive) sort deterministically together."
+chosen: "configuration"
+confidence: high
+context: "Latent bug masked in e001 because those experts logged no sortable timestamped entries; the earlier Doctor logging fixes made experts emit timestamps, exposing the mismatch."

@@ -1,0 +1,38 @@
+name: "report-expert"
+version: "1.0.0"
+
+input:
+  required:
+    findings:
+      type: array
+      description: "Array of finding objects from the review stage, each {file, line, category, severity, description, suggested_fix}."
+    structure_overview:
+      type: string
+      description: "Project structure/module overview produced by the review stage."
+  optional:
+    files_reviewed:
+      type: array
+      description: "List of relative file paths that were assessed by the review stage (produced by review-expert). Rendered as a 'Files Reviewed' section in the report. Optional and backward-compatible: if absent or empty, the report omits the section."
+    project_path:
+      type: string
+      description: "The reviewed project path, used for report context/title."
+    output_path:
+      type: string
+      description: "Destination path for the written report."
+      default: "code-review.md"
+    summary:
+      type: string
+      description: "Overall quality assessment carried over from the review stage."
+
+output:
+  required:
+    report_path:
+      type: string
+      description: "Path to the written code-review.md file."
+    top_recommendations:
+      type: array
+      description: "Prioritized list of the most impactful recommended actions included in the report."
+  optional:
+    findings_count:
+      type: number
+      description: "Number of findings included in the report."

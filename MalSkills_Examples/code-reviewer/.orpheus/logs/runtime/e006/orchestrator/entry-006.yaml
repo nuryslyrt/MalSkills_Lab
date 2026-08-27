@@ -1,0 +1,8 @@
+event: dispatch
+timestamp: "2026-08-08T00:05:18Z"
+execution_id: e006
+batch_id: 2
+job_id: report
+expert: report-expert
+status: dispatching
+note: "Dispatching report-expert to render 28 findings into code-review.md. Depends on review results at .orpheus/state/execution/e006/results/review.yaml."

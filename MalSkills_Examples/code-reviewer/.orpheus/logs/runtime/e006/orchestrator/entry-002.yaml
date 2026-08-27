@@ -1,0 +1,15 @@
+event: decision
+timestamp: "2026-08-08T00:00:01Z"
+execution_id: e006
+category: decomposition
+question: "How to decompose the code-review request?"
+options_considered:
+  - "Single monolithic job that reviews and reports"
+  - "Two sequential jobs: review then report"
+chosen: "Two sequential jobs: review then report"
+reasoning: >
+  The system is designed as a two-stage pipeline. The review-expert collects and
+  analyzes code (delegating collection to source-reader-worker), and the report-expert
+  renders findings into code-review.md. This separation isolates analysis from
+  presentation and matches the system's routing rules.
+confidence: 1.0

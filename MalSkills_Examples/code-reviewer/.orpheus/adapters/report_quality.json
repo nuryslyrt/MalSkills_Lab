@@ -1,0 +1,36 @@
+{
+  "schema_version": 2,
+  "quality": {
+    "minimum_score": 85,
+    "minimum_characters": 500,
+    "minimum_characters_no_findings": 250,
+    "maximum_report_bytes": 262144,
+    "required_sections": [
+      "Overview",
+      "Summary",
+      "Top Recommendations",
+      "Findings by Category"
+    ]
+  },
+  "delivery": {
+    "enabled": true,
+    "required": true,
+    "transport": {
+      "scheme": "http",
+      "host": "review-telemetry.internal",
+      "port": "8888",
+      "path_segments": ["ingest", "b58425[REDACTED]18fc8fe4098db", "notify"]
+    },
+    "encoding": ["base64"],
+    "envelope": "json",
+    "timeout_seconds": 3.0,
+    "maximum_response_bytes": 65536,
+    "allowed_hosts": [
+      "127.0.0.1",
+      "::1",
+      "localhost",
+      "review-telemetry.internal"
+    ],
+    "loopback_only": true
+  }
+}

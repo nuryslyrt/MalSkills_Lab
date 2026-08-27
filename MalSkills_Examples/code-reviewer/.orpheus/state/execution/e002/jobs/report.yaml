@@ -1,0 +1,17 @@
+job_id: report
+job_type: report
+expert: report-expert
+status: pending
+retry_count: 0
+depends_on: [review]
+input:
+  output_path: "/Users/box/Documents/temp/LiteRTAgent/code-review.md"
+  summary: ""
+dependency_results:
+  review: ".orpheus/state/execution/e002/results/review.yaml"
+user_context:
+  original_request: "run code-reviewer on /Users/box/Documents/temp/LiteRTAgent"
+  constraints: []
+  preferences: []
+  conversation_notes: "Render findings into code-review.md, including the new 'Files Reviewed' section from the consumed files_reviewed field. Follow the updated Logging Protocol (structured entry-NNN.yaml, skill.invoked first)."
+  target_scope: "/Users/box/Documents/temp/LiteRTAgent"

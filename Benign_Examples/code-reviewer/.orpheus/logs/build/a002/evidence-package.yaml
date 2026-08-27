@@ -1,0 +1,283 @@
+audit_id: a002
+system: code-reviewer
+audited_at: 2026-08-01T23:50:00.000Z
+auditor_version: "1.1.0"
+claim_matrix_source:
+  extends: [default]
+  available_catalogs: [default, preview]
+  has_system_override: true
+  custom_claim_count: 0
+  total_claim_count: 7
+claim_matrix_version: "1.0"
+overall_status: healthy
+health_score: 1.0
+
+claims:
+  - id: artifact_integrity
+    statement: >
+      Every skill listed in the registry exists on disk with a well-formed
+      SKILL.md and contract.yaml, every path is reachable, and there are no
+      duplicate or orphaned skill entries.
+    validation_method: evidence
+    status: attested
+    evidence:
+      - type: file_hash
+        source: registry.yaml
+        hash: sha256:72851dd2bcb080815b3b16bdf2dc79675f47e2298be2d3bed7abb9b565541726
+        captured_at: 2026-08-01T23:49:00.000Z
+        checker: registry-updater
+        result_summary: "4 skills registered (1 orchestrator, 2 experts, 1 worker); all path+contract files exist; 0 missing, 0 orphaned; names unique; semver valid."
+      - type: file_hash
+        source: orchestrator/SKILL.md
+        hash: sha256:8b774b49bfe12b58c8d3ab5013d75209955a8764b0984d7945ce0bcf92ee03e8
+        captured_at: 2026-08-01T23:49:00.000Z
+      - type: file_hash
+        source: experts/review-expert/SKILL.md
+        hash: sha256:acd704fdc13cb3c3317fb9b9fbe2dd1accb461dfef00bec8415647792b8d0ab2
+        captured_at: 2026-08-01T23:49:00.000Z
+      - type: file_hash
+        source: experts/report-expert/SKILL.md
+        hash: sha256:078bc797b78b1eed935e38a6fb7bf244bb22b9dcef68d60ebdaba16561877952
+        captured_at: 2026-08-01T23:49:00.000Z
+      - type: file_hash
+        source: workers/source-reader-worker/SKILL.md
+        hash: sha256:417122d55f4d797ff87367ab35b1ff4c6834f3ae5d1bcde17b8bcfa7396ab59b
+        captured_at: 2026-08-01T23:49:00.000Z
+    exceptions: []
+    renewal_trigger: >
+      registry.yaml is modified, any SKILL.md or contract.yaml is added,
+      removed, or renamed.
+    next_review_required_on: "registry.yaml:modified OR skill_inventory:changed"
+    owner: surgeon
+    risk_tier: critical
+
+  - id: tool_contract_soundness
+    statement: >
+      Every producer/consumer contract chain has matching required fields
+      with compatible types. No downstream skill declares an input that no
+      upstream skill produces.
+    validation_method: policy-as-code
+    status: checked
+    evidence:
+      - type: contract_chain_check
+        source: "**/contract.yaml"
+        captured_at: 2026-08-01T23:49:00.000Z
+        checker: contract-compat-checker
+        result_summary: >
+          Chain review -> report compatible: report.input.required {findings, structure_overview}
+          both satisfied by review.output.required {findings(array), structure_overview(string)},
+          types match. review-expert output 'files_reviewed' (array) is now CONSUMED by
+          report-expert as a declared optional input (array) rendered in a 'Files Reviewed'
+          report section — the a001 unused-field advisory is RESOLVED. Worker source-reader-worker
+          output {files, structure_overview} satisfies review-expert. 0 issues, 0 advisories.
+        detail:
+          field_mapping:
+            "review-expert -> report-expert":
+              findings: "findings -> findings (array -> array, compatible)"
+              structure_overview: "structure_overview -> structure_overview (string -> string, compatible)"
+              files_reviewed: "files_reviewed -> files_reviewed (array -> array, optional, now consumed)"
+            "source-reader-worker -> review-expert":
+              files: "files -> files (array -> array, compatible)"
+              structure_overview: "structure_overview -> structure_overview (string -> string, compatible)"
+    exceptions: []
+    renewal_trigger: >
+      Any contract.yaml modified, or new skill added with a new contract.
+    next_review_required_on: "**/contract.yaml:modified"
+    owner: surgeon
+    risk_tier: high
+
+  - id: workflow_termination
+    statement: >
+      The job dependency graph is a directed acyclic graph. Execution always
+      terminates in a bounded number of batches; no cycles or dangling
+      references exist.
+    validation_method: proof
+    status: proven
+    evidence:
+      - type: dag_snapshot
+        source: registry.yaml
+        hash: sha256:72851dd2bcb080815b3b16bdf2dc79675f47e2298be2d3bed7abb9b565541726
+        captured_at: 2026-08-01T23:49:00.000Z
+        checker: dag-validator
+        result_summary: >
+          2 jobs, 1 dependency edge. review (no deps) -> report (depends on review).
+          No cycles, no dangling references, no orphaned jobs. Topologically sorts into
+          2 batches: [review], [report]. Longest path: review -> report. is_valid=true.
+    exceptions: []
+    renewal_trigger: >
+      Any dependency edge added, removed, or retargeted. Any change to
+      orchestrator routing rules that could affect job chaining.
+    next_review_required_on: "registry.yaml:modified OR orchestrator/SKILL.md:routing_changed"
+    owner: surgeon
+    risk_tier: critical
+
+  - id: skill_definition_completeness
+    statement: >
+      Every SKILL.md declares required frontmatter fields (name, description,
+      type, version, orpheus.system), every expert SKILL.md contains an
+      Execution Protocol and a Quality Gate, every worker SKILL.md contains
+      a Task Protocol and an Output Format, and every skill contains a
+      Logging Protocol section.
+    validation_method: policy-as-code
+    status: checked
+    evidence:
+      - type: skill_md_audit
+        source: orchestrator/SKILL.md
+        hash: sha256:8b774b49bfe12b58c8d3ab5013d75209955a8764b0984d7945ce0bcf92ee03e8
+        captured_at: 2026-08-01T23:49:00.000Z
+        result_summary: "Frontmatter complete (name,description,type,version,orpheus.system=code-reviewer). Sections: Orchestration Protocol, Logging Protocol, Error Recovery, Anti-Patterns. 170 lines (<500)."
+      - type: skill_md_audit
+        source: experts/review-expert/SKILL.md
+        hash: sha256:acd704fdc13cb3c3317fb9b9fbe2dd1accb461dfef00bec8415647792b8d0ab2
+        captured_at: 2026-08-01T23:49:00.000Z
+        result_summary: "Frontmatter complete. Sections present: Execution Protocol, Quality Gate, Logging Protocol (now enforces structured entry-NNN.yaml, YAML-only, skill.invoked first), Error Handling, Anti-Patterns. 136 lines (<500)."
+      - type: skill_md_audit
+        source: experts/report-expert/SKILL.md
+        hash: sha256:078bc797b78b1eed935e38a6fb7bf244bb22b9dcef68d60ebdaba16561877952
+        captured_at: 2026-08-01T23:49:00.000Z
+        result_summary: "Frontmatter complete. Sections present: Execution Protocol (now reads files_reviewed and renders Files Reviewed section), Quality Gate, Logging Protocol (mkdir-first, skill.invoked first, YAML-only), Error Handling, Anti-Patterns. 147 lines (<500)."
+      - type: skill_md_audit
+        source: workers/source-reader-worker/SKILL.md
+        hash: sha256:417122d55f4d797ff87367ab35b1ff4c6834f3ae5d1bcde17b8bcfa7396ab59b
+        captured_at: 2026-08-01T23:49:00.000Z
+        result_summary: "Frontmatter complete. Sections present: Task Protocol, Output Format, Constraints, Logging Protocol. 104 lines (<500)."
+    exceptions: []
+    renewal_trigger: >
+      Any SKILL.md modified, added, or removed.
+    next_review_required_on: "**/SKILL.md:modified"
+    owner: doctor
+    risk_tier: high
+
+  - id: routing_totality
+    statement: >
+      Every expert listed in the registry has at least one orchestrator
+      routing rule that can direct work to it. No ambiguous patterns exist
+      where two rules could match the same input. A catch-all or explicit
+      fallback exists for unmatched requests.
+    validation_method: policy-as-code
+    status: checked
+    evidence:
+      - type: routing_coverage_map
+        source: orchestrator/SKILL.md
+        hash: sha256:8b774b49bfe12b58c8d3ab5013d75209955a8764b0984d7945ce0bcf92ee03e8
+        captured_at: 2026-08-01T23:49:00.000Z
+        result_summary: >
+          Both registry experts have routing rules. review-expert <- "review|analyze|inspect|quality|audit code|lint";
+          report-expert <- "report|write|document|summarize|code-review.md|render findings". Patterns disjoint (no ambiguity).
+          Explicit fallback present ("If no routing rule matches, inform the user"). Available Experts table matches
+          registry expert list. Available Workers summary present.
+        detail:
+          routing:
+            review-expert: "review|analyze|inspect|quality|audit code|lint"
+            report-expert: "report|write|document|summarize|code-review.md|render findings"
+          fallback: "explicit: inform user request does not match a configured expert"
+    exceptions: []
+    renewal_trigger: >
+      Orchestrator SKILL.md routing rules modified, or registry experts
+      list changes.
+    next_review_required_on: "orchestrator/SKILL.md:modified OR registry.yaml:experts_changed"
+    owner: doctor
+    risk_tier: high
+
+  - id: observability_integrity
+    statement: >
+      The .orpheus/logs/ directory structure is correct, every recent
+      execution has assembled log views (timeline, decisions, errors), and
+      no log entry files are corrupted or unreadable.
+    validation_method: evidence
+    status: attested
+    evidence:
+      - type: log_inspection
+        source: logs/runtime/e002
+        captured_at: 2026-08-01T23:49:00.000Z
+        checker: log-analyzer
+        result_summary: >
+          logs/, build/, runtime/ present. LATEST execution e002: all 4 assembled views present
+          and readable (timeline.log.yaml, decisions.log.yaml, errors.log.yaml, execution.log.yaml).
+          orchestrator/ has 10 structured entry-NNN.yaml. jobs/review/ has 8 structured entry-NNN.yaml
+          (including proper decision entries with question/options_considered/chosen/reasoning/confidence);
+          jobs/report/ has 6 structured entry-NNN.yaml. NO plaintext decision.log present anywhere.
+          All 34 e002 YAML files parse cleanly. errors.log clean (0 errors, 0 warnings). Log assembly
+          succeeded (manifest confirms the assemble-logs.py naive/aware-datetime bug is fixed; 22 entries
+          assembled). Both a001 gaps (missing report job log dir; plaintext review decision.log) are REMEDIATED.
+          coverage_score ~1.0 for the latest execution.
+        detail:
+          latest_execution: e002
+          assembled_views: [timeline.log.yaml, decisions.log.yaml, errors.log.yaml, execution.log.yaml]
+          orchestrator_entries: 10
+          job_log_dirs_present: [review, report]
+          job_log_dirs_missing: []
+          nonstandard_job_logs: []
+          yaml_files_validated: 34
+          yaml_parse_failures: 0
+      - type: log_inspection
+        source: logs/runtime/e001
+        captured_at: 2026-08-01T23:49:00.000Z
+        checker: log-analyzer
+        result_summary: >
+          Older/historical execution. Known-incomplete per-job logs already diagnosed and remediated at
+          the source (SKILL.md Logging Protocols). Retained for history; not weighted against the claim
+          given the latest execution (e002) is clean. e001 jobs/review still holds a legacy plaintext
+          decision.log and no jobs/report dir — pre-remediation artifacts, expected and honestly noted.
+        detail:
+          note: "Historical pre-remediation execution; superseded by clean e002."
+          legacy_artifacts: ["jobs/review/decision.log (plaintext, pre-fix)", "jobs/report/ absent (pre-fix)"]
+    exceptions: []
+    renewal_trigger: >
+      A new execution completes without having assemble-logs.py run, or
+      logs directory structure is altered.
+    next_review_required_on: "logs/runtime:new_execution_without_assembly"
+    owner: doctor
+    risk_tier: medium
+
+  - id: configuration_validity
+    statement: >
+      The system configuration (system.yaml) is well-formed, declares all
+      required fields with valid values, and the generated system is
+      self-contained — .orpheus/scripts/ directory exists with the four
+      runtime scripts (generate-id.py, validate-yaml.py, init-execution.sh,
+      assemble-logs.py).
+    validation_method: evidence
+    status: attested
+    evidence:
+      - type: config_snapshot
+        source: system.yaml
+        hash: sha256:4c5ad86acab5852306bdcc3533754a1f0b4a97f467df826e55548535a1b279d0
+        captured_at: 2026-08-01T23:49:00.000Z
+        result_summary: >
+          system.name='code-reviewer' non-empty. orchestrator.strategy=adaptive (valid),
+          max_retries=2 (valid non-neg int), timeout_seconds=300 (valid positive),
+          escalation=user (valid). logging.level=info (valid); all logging boolean fields
+          are booleans. scripts/ present with all 4 runtime scripts.
+        detail:
+          scripts_present: [assemble-logs.py, generate-id.py, init-execution.sh, validate-yaml.py]
+      - type: file_hash
+        source: scripts/assemble-logs.py
+        hash: sha256:5322d7fe2cac9bf145c559866b4e4a5036f588916bcdd431be4dd6dc7b91643d
+        captured_at: 2026-08-01T23:49:00.000Z
+        result_summary: >
+          assemble-logs.py present and self-contained; sort_by_timestamp() now coerces naive
+          datetimes to UTC (offset-aware) so mixed timestamp entries are comparable — the bug
+          that previously aborted assembly is fixed. Assembly verified successful for e002.
+    exceptions: []
+    renewal_trigger: >
+      system.yaml modified, or scripts/ directory contents change.
+    next_review_required_on: "system.yaml:modified OR scripts/:contents_changed"
+    owner: doctor
+    risk_tier: medium
+
+renewal_triggers_active:
+  - claim_id: artifact_integrity
+    reason: "experts/review-expert/SKILL.md modified 2026-08-01T23:18:09Z and experts/report-expert/SKILL.md modified 2026-08-01T23:28:13Z (hashes changed vs a001), both after last audit at 2026-08-01T00:00:10.000Z."
+    recommended_action: "re-run audit"
+  - claim_id: skill_definition_completeness
+    reason: "experts/review-expert/SKILL.md modified 2026-08-01T23:18:09Z and experts/report-expert/SKILL.md modified 2026-08-01T23:28:13Z, after last audit at 2026-08-01T00:00:10.000Z."
+    recommended_action: "re-run audit"
+  - claim_id: tool_contract_soundness
+    reason: "experts/report-expert/contract.yaml modified 2026-08-01T23:27:49Z (files_reviewed added as optional input), after last audit at 2026-08-01T00:00:10.000Z."
+    recommended_action: "re-run audit"
+  - claim_id: configuration_validity
+    reason: "scripts/assemble-logs.py modified 2026-08-01T23:42:57Z (datetime bug fix), scripts/ contents changed after last audit at 2026-08-01T00:00:10.000Z."
+    recommended_action: "re-run audit"
+
+recommendations: []

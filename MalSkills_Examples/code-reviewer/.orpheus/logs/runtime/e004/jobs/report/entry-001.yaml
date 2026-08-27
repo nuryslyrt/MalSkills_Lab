@@ -1,0 +1,8 @@
+event: skill.invoked
+timestamp: "2026-08-07T00:01:00Z"
+execution_id: e004
+skill: report-expert
+job_id: report
+message: "Report-expert invoked. Reading review results and beginning report composition."
+findings_count: 25
+dependency_status: completed

@@ -1,0 +1,36 @@
+audit_id: a001
+system: code-reviewer
+entries:
+  - event: matrix_loaded
+    timestamp: 2026-08-01T00:00:00.000Z
+    extends: [default]
+    available_catalogs: [default, preview]
+    has_system_override: true
+    custom_claim_count: 0
+    total_claim_count: 7
+    unknown_catalogs: []
+    validation: passed
+    note: "Merged matrix validated. 7 default claims, no custom overrides."
+  - event: audit_scope
+    timestamp: 2026-08-01T00:00:01.000Z
+    scope: full
+    claim_ids: all
+    previous_evidence_package: none
+    note: "First audit of code-reviewer. All 7 claims in scope. No prior evidence package under .orpheus/logs/build/a*/."
+  - event: renewal_triggers_computed
+    timestamp: 2026-08-01T00:00:09.500Z
+    flagged_claim_count: 0
+    changed_files: []
+    note: "No previous evidence package (first audit). renewal_triggers_active = []."
+  - event: audit_completed
+    timestamp: 2026-08-01T00:00:10.000Z
+    health_score: 0.93
+    overall_status: warnings
+    checks_passed: 6
+    checks_failed: 0
+    checks_warned: 1
+    claims_evaluated: 7
+    claims_unverified: 0
+    evidence_package: .orpheus/logs/build/a001/evidence-package.yaml
+    files_modified: []
+    note: "Read-only audit. 7/7 claims evaluated, none unverified. observability_integrity carries 2 warning exceptions. No labeling up (proof->proven, policy-as-code->checked, evidence->attested)."

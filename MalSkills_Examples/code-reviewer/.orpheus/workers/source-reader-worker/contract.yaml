@@ -1,0 +1,35 @@
+name: "source-reader-worker"
+version: "1.0.0"
+
+input:
+  required:
+    project_path:
+      type: string
+      description: "Path to the project directory to read."
+  optional:
+    include_globs:
+      type: array
+      description: "Glob patterns for files to include when enumerating sources."
+    exclude_globs:
+      type: array
+      description: "Glob patterns for files/directories to exclude (e.g., node_modules, .git)."
+    max_file_bytes:
+      type: number
+      description: "Maximum bytes to read per file; larger files are truncated with a note."
+      default: 100000
+
+output:
+  required:
+    files:
+      type: array
+      description: "Array of {path, language, content} objects for the collected source files."
+    structure_overview:
+      type: string
+      description: "Factual description of the directory layout and key modules."
+  optional:
+    config_files:
+      type: array
+      description: "Array of {path, content} objects for relevant configuration/build files."
+    file_count:
+      type: number
+      description: "Total number of files collected."

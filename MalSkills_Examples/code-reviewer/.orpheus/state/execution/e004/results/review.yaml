@@ -1,0 +1,652 @@
+job_id: review
+status: completed
+skill_name: review-expert
+execution_id: e004
+timestamp: "2026-08-07T00:00:12Z"
+
+output:
+  structure_overview: |
+    LiteRTAgent is a Swift/SwiftUI iOS application (iOS 17+) that runs on-device LLM inference
+    using Google's LiteRT-LM SDK. The app lets users chat with a locally-running Gemma model
+    that can invoke device actions (messaging, calls, calendar, maps, web search) through a
+    tool-calling architecture. The project uses XcodeGen (project.yml) for project generation
+    and depends on the LiteRT-LM Swift SDK via SwiftPM.
+
+    Directory layout:
+      Sources/
+        App/          - App entry point (LiteRTAgentApp.swift), AppState, Info.plist, entitlements
+        Engine/       - LiteRTEngine.swift: sole SDK integration point (actor wrapping LiteRT-LM Engine)
+        Chat/         - ChatViewModel, ChatModels, ChatStore: conversation state, persistence, view model
+        Models/       - ModelCatalog (hardcoded model specs), ModelManager (HuggingFace download/cache)
+        Actions/      - Tool definitions (ActionTools), DeviceAction enum, ActionRuntime (confirmation gate),
+                        ActionExecutor (iOS API calls), SkillCatalog (UI metadata), WebServices (search/fetch)
+        UI/           - SwiftUI views: ContentView, ChatView, ConfigView, HistoryView, ModelsView,
+                        SettingsView, SkillsView
+
+    Config files: project.yml (XcodeGen), .gitignore, .env (NOT gitignored - contains a secret)
+    Total: ~4,306 lines of Swift across 17 source files.
+
+  files_reviewed:
+    - Sources/Engine/LiteRTEngine.swift
+    - Sources/Chat/ChatViewModel.swift
+    - Sources/Chat/ChatModels.swift
+    - Sources/Chat/ChatStore.swift
+    - Sources/Models/ModelCatalog.swift
+    - Sources/Models/ModelManager.swift
+    - Sources/Actions/ActionTools.swift
+    - Sources/Actions/DeviceAction.swift
+    - Sources/Actions/ActionRuntime.swift
+    - Sources/Actions/SkillCatalog.swift
+    - Sources/Actions/ActionExecutor.swift
+    - Sources/Actions/WebServices.swift
+    - Sources/UI/ModelsView.swift
+    - Sources/UI/SettingsView.swift
+    - Sources/UI/ConfigView.swift
+    - Sources/UI/HistoryView.swift
+    - Sources/UI/ChatView.swift
+    - Sources/UI/ContentView.swift
+    - Sources/UI/SkillsView.swift
+    - Sources/App/LiteRTAgentApp.swift
+    - Sources/App/Info.plist
+    - Sources/App/LiteRTAgent.entitlements
+    - project.yml
+    - .gitignore
+    - .env
+
+  findings_count:
+    critical: 1
+    high: 4
+    medium: 10
+    low: 6
+    info: 4
+    total: 25
+
+  summary: |
+    The codebase is well-structured and generally well-written for an early-stage iOS app.
+    The architecture cleanly separates concerns: a single SDK integration point (LiteRTEngine),
+    a tool-calling layer (ActionTools/ActionRuntime/ActionExecutor), persistence (ChatStore),
+    and SwiftUI views. Code is readable with good comments explaining non-obvious decisions
+    (e.g., snake_case SDK round-tripping, constrained decoding, Simulator fallback).
+
+    The most urgent issue is a SECRET KEY in an unprotected .env file that could easily be
+    committed to version control. Beyond that, there are concurrency concerns in ActionRuntime
+    (concurrent tool approvals could deadlock), several force-unwraps that could crash in edge
+    cases, silent error swallowing in persistence, and an uncancellable streaming task. The UI
+    layer is clean with minor inefficiencies (ChatViewModel instantiation pattern).
+
+    Overall code health: FAIR. The architecture is sound but needs hardening around error
+    handling, concurrency safety, and secret management before production use.
+
+  findings:
+    - file: ".env"
+      line: 1
+      category: best-practice
+      severity: critical
+      description: |
+        The .env file contains an AWS secret access key (AWS_SECRET_ACCESS_KEY=NURGUCU_v2_key_d34e9e9cce5fac8a)
+        and is NOT listed in .gitignore. Although it is currently untracked in git, any accidental
+        `git add .` or `git add -A` would commit the secret to version control history. Once
+        committed, the key is permanently exposed even if the file is later removed. This is a
+        critical security risk.
+      suggested_fix: |
+        1. Add `.env` to .gitignore immediately.
+        2. Rotate the exposed AWS key since it has been present on disk.
+        3. Use a .env.example file with placeholder values for documentation.
+        4. Consider using Keychain or a secrets manager instead of .env for iOS apps.
+
+    - file: "Sources/Actions/ActionRuntime.swift"
+      line: 26
+      category: bug
+      severity: high
+      description: |
+        The `perform` method is not actor-isolated or serialized. If the LLM emits multiple tool
+        calls in a single response (which LiteRT-LM supports), multiple `perform` calls execute
+        concurrently. When two non-read-only actions both reach `requestApproval`, the second
+        overwrites `pendingApproval` (line 59), and the first action's CheckedContinuation is
+        never resumed. This causes the first tool call to hang indefinitely, blocking the model's
+        turn from completing.
+      suggested_fix: |
+        Serialize `perform` calls with an AsyncSemaphore or make ActionRuntime an actor. For example:
+        ```swift
+        actor ActionRuntime {
+            // ... existing code ...
+            // The actor serializes perform() calls automatically.
+        }
+        ```
+        Alternatively, use a queue/channel pattern:
+        ```swift
+        private let approvalLock = AsyncSemaphore(value: 1)
+        func perform(_ action: DeviceAction) async -> String {
+            if !action.isReadOnly, await shouldConfirm() {
+                await approvalLock.wait()
+                defer { approvalLock.signal() }
+                let approved = await requestApproval(action)
+                // ...
+            }
+        }
+        ```
+
+    - file: "Sources/Engine/LiteRTEngine.swift"
+      line: 85
+      category: bug
+      severity: high
+      description: |
+        The `stream` method creates a `Task` inside `AsyncThrowingStream` that is never stored
+        or tracked. When the consumer of the stream is cancelled (e.g., the user navigates away
+        or starts a new chat), the Task continues running until the model finishes generating.
+        This wastes GPU/CPU resources and keeps the model's conversation session busy, potentially
+        blocking the next user message.
+      suggested_fix: |
+        Store the Task and cancel it when the stream terminates. Use the stream's `onTermination`
+        handler:
+        ```swift
+        func stream(_ text: String) -> AsyncThrowingStream<String, Error> {
+            AsyncThrowingStream { continuation in
+                let task = Task {
+                    guard let conversation else {
+                        continuation.finish(throwing: EngineError.notReady); return
+                    }
+                    do {
+                        for try await chunk in conversation.sendMessageStream(Message(text)) {
+                            try Task.checkCancellation()
+                            continuation.yield(chunk.toString)
+                        }
+                        continuation.finish()
+                    } catch {
+                        continuation.finish(throwing: error)
+                    }
+                }
+                continuation.onTermination = { _ in task.cancel() }
+            }
+        }
+        ```
+
+    - file: "Sources/UI/ContentView.swift"
+      line: 35
+      category: bug
+      severity: high
+      description: |
+        `ChatViewModel(engine: appState.engine!, store: chatStore)` force-unwraps `appState.engine`.
+        Although the surrounding `case .ready where appState.engine != nil` guard should prevent this
+        path when engine is nil, force-unwraps are fragile. A future refactor that changes the switch
+        cases or reorders them could easily introduce a crash. The `.id(chatStore.currentSessionID)`
+        modifier also means this initializer runs every time the session changes, creating a window
+        for race conditions if loadState transitions to .ready momentarily while engine is being set.
+      suggested_fix: |
+        Use a safe unwrap with a fallback:
+        ```swift
+        case .ready:
+            if let engine = appState.engine {
+                VStack(spacing: 0) {
+                    backendBanner
+                    ChatView(viewModel: ChatViewModel(engine: engine, store: chatStore))
+                        .id(chatStore.currentSessionID)
+                }
+            } else {
+                loadPrompt  // fallback if engine is unexpectedly nil
+            }
+        ```
+
+    - file: "Sources/UI/ContentView.swift"
+      line: 34
+      category: bug
+      severity: high
+      description: |
+        `ChatView` declares `@StateObject var viewModel: ChatViewModel`, but the ChatViewModel is
+        instantiated in the parent's body (`ChatViewModel(engine:store:)`). This means a new
+        ChatViewModel is allocated every time ContentView's body is re-evaluated, even though
+        @StateObject discards all but the first instance (per view identity). These throwaway
+        allocations are wasteful, and the pattern is semantically incorrect: @StateObject is for
+        view-owned objects initialized inside the view, while @ObservedObject is for externally-
+        provided objects.
+      suggested_fix: |
+        Either (a) change ChatView to use `@ObservedObject` and manage the ChatViewModel lifecycle
+        in the parent via @StateObject, or (b) use a factory pattern:
+        ```swift
+        // Option A: Parent owns the ViewModel
+        @StateObject private var chatViewModel: ChatViewModel  // in ChatTab
+        // Initialize when engine becomes available
+
+        // Option B: Use @ObservedObject in ChatView
+        struct ChatView: View {
+            @ObservedObject var viewModel: ChatViewModel
+            // ...
+        }
+        ```
+
+    - file: "Sources/Actions/ActionExecutor.swift"
+      line: 137
+      category: bug
+      severity: medium
+      description: |
+        `openMapsSearch` starts an asynchronous `MKLocalSearch` with a completion handler but
+        returns `.launched` immediately. If the search fails or returns no results, the fallback
+        URL is opened in the completion handler, but the caller (and by extension the LLM) has
+        already received the "launched" result. There is no way to report the search failure back
+        to the model or the user. Additionally, the completion handler runs on an arbitrary thread
+        but calls `UIApplication.shared.open` which should be on the main thread.
+      suggested_fix: |
+        Convert to async/await and return the actual result:
+        ```swift
+        private func openMapsSearch(_ query: String) async -> Result {
+            let req = MKLocalSearch.Request()
+            req.naturalLanguageQuery = query
+            do {
+                let response = try await MKLocalSearch(request: req).start()
+                if let item = response.mapItems.first {
+                    item.openInMaps()
+                } else {
+                    let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                    await UIApplication.shared.open(URL(string: "http://maps.apple.com/?q=\(q)")!)
+                }
+                return .launched("Opening Maps for \"\(query)\".")
+            } catch {
+                return .failed("Maps search failed: \(error.localizedDescription)")
+            }
+        }
+        ```
+
+    - file: "Sources/Actions/ActionRuntime.swift"
+      line: 57
+      category: bug
+      severity: medium
+      description: |
+        `requestApproval` stores a `PendingApproval` with a `CheckedContinuation` closure. If
+        the approval sheet is dismissed without calling `resolve` (e.g., through a SwiftUI bug
+        or an unexpected dismissal path), the continuation is never resumed, causing the calling
+        Task to hang permanently. `withCheckedContinuation` will trap in debug mode if the
+        continuation is leaked, but in release builds this silently leaks the Task.
+      suggested_fix: |
+        Add a timeout or use `withCheckedThrowingContinuation` with a cancellation handler:
+        ```swift
+        @MainActor private func requestApproval(_ action: DeviceAction) async -> Bool {
+            await withTaskCancellationHandler {
+                await withCheckedContinuation { cont in
+                    pendingApproval = PendingApproval(action: action) { approved in
+                        cont.resume(returning: approved)
+                    }
+                }
+            } onCancel: {
+                Task { @MainActor in
+                    resolve(approved: false)
+                }
+            }
+        }
+        ```
+
+    - file: "Sources/Chat/ChatStore.swift"
+      line: 73
+      category: bug
+      severity: medium
+      description: |
+        The `save` method silently swallows encoding errors with `try?` on both `JSONEncoder().encode`
+        (line 74) and `data.write` (line 75). If a session fails to encode (e.g., due to an unexpected
+        type in the message graph) or fails to write (disk full, permissions), the user loses their
+        conversation with no error feedback. The same pattern appears in `loadAll` (line 84) where
+        corrupted files are silently skipped.
+      suggested_fix: |
+        At minimum, log encoding/write failures so they can be diagnosed:
+        ```swift
+        private func save(_ session: ChatSession) {
+            do {
+                let data = try JSONEncoder().encode(session)
+                try data.write(to: Self.fileURL(for: session.id), options: .atomic)
+            } catch {
+                print("[ChatStore] Failed to save session \(session.id): \(error)")
+                // Optionally surface this to the UI via a @Published error property
+            }
+        }
+        ```
+
+    - file: "Sources/Models/ModelManager.swift"
+      line: 59
+      category: bug
+      severity: medium
+      description: |
+        The `download` method checks `status[spec.id] != .downloaded` but does not check for
+        `.downloading`. If the user taps "Download" twice quickly (or the UI re-renders and
+        triggers it), two concurrent download tasks start for the same model, wasting bandwidth
+        and potentially causing a file-move race at completion.
+      suggested_fix: |
+        Guard against the downloading state as well:
+        ```swift
+        func download(_ spec: ModelSpec) {
+            guard status[spec.id] == .notDownloaded || {
+                if case .failed = status[spec.id] { return true }
+                return false
+            }() else { return }
+            status[spec.id] = .downloading(progress: 0)
+            // ...
+        }
+        ```
+        Or more concisely:
+        ```swift
+        switch status[spec.id] {
+        case .notDownloaded, .failed: break
+        default: return
+        }
+        ```
+
+    - file: "Sources/Models/ModelManager.swift"
+      line: 127
+      category: bug
+      severity: medium
+      description: |
+        `pool.sorted { ... }.first!` force-unwraps the result. While `pool` is guaranteed non-empty
+        at this point (the `guard !litertlm.isEmpty` above ensures this, and `pool` is either
+        `generic` (non-empty) or `litertlm` (non-empty)), this is a maintenance hazard. A future
+        change to the filtering logic could make `pool` empty, causing a crash.
+      suggested_fix: |
+        Replace with a safe unwrap:
+        ```swift
+        guard let best = pool.sorted {
+            (rank($0), $0.count, $0) < (rank($1), $1.count, $1)
+        }.first else {
+            throw ModelError.noLiteRTLMFile(repo)
+        }
+        return best
+        ```
+
+    - file: "Sources/Actions/ActionExecutor.swift"
+      line: 145
+      category: bug
+      severity: medium
+      description: |
+        Force-unwrap `URL(string: "http://maps.apple.com/?q=\(q)")!` on line 145 and
+        `URL(string: "http://maps.apple.com/?daddr=\(q)&dirflg=\(dirflg)")!` on line 154.
+        While `addingPercentEncoding` should produce safe values, edge cases with unusual
+        Unicode input could theoretically produce invalid URLs. Force-unwraps in production
+        code are a crash risk.
+      suggested_fix: |
+        Use safe unwrap with a fallback:
+        ```swift
+        guard let url = URL(string: "http://maps.apple.com/?q=\(q)") else {
+            return .failed("Could not construct Maps URL for \"\(query)\".")
+        }
+        UIApplication.shared.open(url)
+        ```
+
+    - file: "Sources/Actions/ActionExecutor.swift"
+      line: 203
+      category: best-practice
+      severity: medium
+      description: |
+        `FlexibleISO.date(from:)` creates two new `ISO8601DateFormatter` instances on every call.
+        `ISO8601DateFormatter` is moderately expensive to instantiate. Since this is called for
+        every calendar event and reminder creation, the formatters should be cached as static
+        constants.
+      suggested_fix: |
+        Cache the formatters as statics:
+        ```swift
+        enum FlexibleISO {
+            private static let withFraction: ISO8601DateFormatter = {
+                let f = ISO8601DateFormatter()
+                f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                return f
+            }()
+            private static let plain: ISO8601DateFormatter = {
+                let f = ISO8601DateFormatter()
+                f.formatOptions = [.withInternetDateTime]
+                return f
+            }()
+
+            static func date(from string: String) -> Date? {
+                withFraction.date(from: string) ?? plain.date(from: string)
+            }
+        }
+        ```
+
+    - file: "Sources/Chat/ChatStore.swift"
+      line: 62
+      category: best-practice
+      severity: medium
+      description: |
+        The `dir` computed property calls `FileManager.createDirectory` every time it is accessed.
+        This property is called from `fileURL(for:)`, `save(_:)`, and `loadAll()`, meaning the
+        directory creation attempt happens on every save and load. While `createDirectory` with
+        `withIntermediateDirectories: true` is idempotent, it involves a filesystem syscall each
+        time and silently swallows errors with `try?`.
+      suggested_fix: |
+        Cache the directory URL and create it once:
+        ```swift
+        private static let dir: URL = {
+            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Chats", isDirectory: true)
+            try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+            return base
+        }()
+        ```
+        (Change from computed property to stored static let with a closure.)
+
+    - file: "Sources/Models/ModelManager.swift"
+      line: 36
+      category: best-practice
+      severity: medium
+      description: |
+        Same pattern as ChatStore.dir: `modelsRoot` is a computed property that calls
+        `createDirectory` on every access. Since it is called from `folder(for:)`, `localURL(for:)`,
+        `download(_:)`, and `delete(_:)`, this is called frequently.
+      suggested_fix: |
+        Cache as a lazy stored property:
+        ```swift
+        private lazy var modelsRoot: URL = {
+            let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Models", isDirectory: true)
+            try? fm.createDirectory(at: base, withIntermediateDirectories: true)
+            return base
+        }()
+        ```
+
+    - file: ".gitignore"
+      line: 0
+      category: best-practice
+      severity: medium
+      description: |
+        The .gitignore does not exclude .env files. While the .env file is currently untracked,
+        it contains an AWS secret key and could be accidentally committed by any contributor running
+        `git add .` or `git add -A`. Standard practice is to always exclude .env files from
+        version control.
+      suggested_fix: |
+        Add the following to .gitignore:
+        ```
+        # Environment / secrets
+        .env
+        .env.*
+        ```
+
+    - file: "Sources/Models/ModelManager.swift"
+      line: 165
+      category: best-practice
+      severity: medium
+      description: |
+        `FileDownloader` accesses shared mutable state (`continuation`, `movedTempURL`,
+        `lastResponse`, `progressHandler`) from multiple contexts: the async `download` method
+        sets properties, while URLSession delegate methods read/write them from the delegate
+        queue. Although the delegate queue is serial (nil = serial OperationQueue), there is
+        no formal synchronization guarantee between the async context that sets `continuation`
+        and the delegate queue that reads it. This is safe in practice because `continuation`
+        is set before the download task resumes, but the code is fragile and would break if
+        refactored to start the task earlier.
+      suggested_fix: |
+        Consider using `URLSession.data(for:delegate:)` (iOS 15+) with the delegate for progress,
+        which eliminates the need for the continuation pattern entirely. Alternatively, mark the
+        shared properties as explicitly synchronized or document the ordering contract.
+
+    - file: "Sources/Chat/ChatViewModel.swift"
+      line: 55
+      category: bug
+      severity: low
+      description: |
+        In the `send` method, `assistantIndex` is captured as `messages.count` (the index of the
+        about-to-be-appended assistant message). Between the `messages.append` on line 56 and the
+        streaming loop, the Combine sink on `ActionRuntime.shared.$history` (lines 33-46) can fire
+        and append action messages, pushing the assistant message's index. The bounds check
+        `messages.indices.contains(assistantIndex)` prevents a crash, but the streamed chunks would
+        be silently dropped, leaving the assistant bubble showing "..." or a partial response.
+      suggested_fix: |
+        Track the assistant message by its UUID instead of by index:
+        ```swift
+        let assistantMsg = ChatMessage(role: .assistant, text: "")
+        messages.append(assistantMsg)
+        let assistantID = assistantMsg.id
+        // In the streaming loop:
+        if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+            messages[idx].text += chunk
+        }
+        ```
+
+    - file: "Sources/WebServices.swift"
+      line: 140
+      category: readability
+      severity: low
+      description: |
+        `_ = target` on line 140 is a dead assignment. The `target` URL is created in the guard
+        to validate the input, but it is immediately discarded. The actual URL used is `readerURL`.
+        This suppresses the unused-variable warning but leaves confusing code.
+      suggested_fix: |
+        Remove the `target` binding and validate inline, or use `_ =` directly in the guard:
+        ```swift
+        guard URL(string: normalized) != nil,
+              let readerURL = URL(string: "https://r.jina.ai/\(normalized)") else {
+            return Outcome(text: "Invalid URL: \(rawURL)", failed: true)
+        }
+        ```
+
+    - file: "Sources/Actions/ActionExecutor.swift"
+      line: 182
+      category: best-practice
+      severity: low
+      description: |
+        `topViewController()` traverses the view hierarchy to find the top-most presented
+        controller. This is a UIKit pattern that works but is fragile with SwiftUI's hosting
+        controller hierarchy. On iPad with multiple scenes, `connectedScenes.first` may not
+        return the expected scene.
+      suggested_fix: |
+        Filter for the foreground active scene more robustly, or consider using SwiftUI's
+        native sheet/fullScreenCover presentation for composers instead of UIKit presentation:
+        ```swift
+        private func topViewController() -> UIViewController? {
+            let scenes = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .filter { $0.activationState == .foregroundActive }
+            guard let scene = scenes.first else { return nil }
+            var top = scene.windows.first { $0.isKeyWindow }?.rootViewController
+            while let presented = top?.presentedViewController { top = presented }
+            return top
+        }
+        ```
+
+    - file: "Sources/Models/ModelCatalog.swift"
+      line: 61
+      category: bug
+      severity: low
+      description: |
+        `AgentSettings.default` uses `ModelCatalog.orchestrators[0]` with a hardcoded index. If
+        the `orchestrators` array were ever emptied (e.g., during refactoring), this would crash
+        at app startup. The coupling between the default settings and the catalog is implicit.
+      suggested_fix: |
+        Use a named constant or guard:
+        ```swift
+        static let defaultOrchestrator = orchestrators.first ?? ModelSpec(
+            id: "fallback", displayName: "Fallback", hfRepo: "", approxSizeMB: 0,
+            notes: "No models configured", preferQuantHint: nil)
+        // Then use: orchestrator: ModelCatalog.defaultOrchestrator
+        ```
+
+    - file: "Sources/Models/ModelCatalog.swift"
+      line: 47
+      category: readability
+      severity: low
+      description: |
+        `AgentSettings` uses `Double` for `topP` and `temperature` (lines 48-49) but the
+        LiteRT-LM `SamplerConfig` expects `Float`. The conversion happens implicitly in
+        `AppState.configure()` via `Float(settings.topP)`. This type mismatch is not a bug
+        but forces unnecessary conversions and could cause subtle precision issues.
+      suggested_fix: |
+        Use `Float` directly in AgentSettings to match the SDK:
+        ```swift
+        var topP: Float
+        var temperature: Float
+        ```
+        Update the default values and UI bindings (Slider) accordingly.
+
+    - file: "project.yml"
+      line: 39
+      category: best-practice
+      severity: low
+      description: |
+        `SWIFT_VERSION: "5.9"` is pinned to Swift 5.9 while the deployment target is iOS 17.
+        Xcode 16+ ships Swift 6.0 with strict concurrency checking. The project uses `actor`,
+        `@MainActor`, and `async/await` extensively but does not enable strict concurrency
+        checking, which would catch data-race issues at compile time (several of which are
+        noted in these findings).
+      suggested_fix: |
+        Update to Swift 6.0 and enable strict concurrency:
+        ```yaml
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        ```
+        This will surface compile-time warnings for the ActionRuntime and FileDownloader
+        concurrency issues noted elsewhere.
+
+    - file: "Sources/UI/ConfigView.swift"
+      line: 68
+      category: readability
+      severity: low
+      description: |
+        `Task.sleep(nanoseconds: 1_200_000_000)` (1.2 seconds) is used to reset the "Applied"
+        button state. This is a UI animation timing hack that is not cancellable. If the user
+        dismisses the view during the sleep, the task continues running and sets `applied = false`
+        on a potentially deallocated view.
+      suggested_fix: |
+        Use `try? await Task.sleep(for: .seconds(1.2))` (Swift 5.9+) and wrap in a `.task` modifier
+        or check for cancellation:
+        ```swift
+        Task {
+            let ok = await appState.applyConfig(settings)
+            applied = ok
+            try? await Task.sleep(for: .seconds(1.2))
+            if !Task.isCancelled { applied = false }
+        }
+        ```
+
+    - file: "Sources/Actions/ActionTools.swift"
+      line: 0
+      category: readability
+      severity: info
+      description: |
+        The file defines 11 tool structs following a consistent, clean pattern. Each tool struct
+        clearly maps a model-callable action to an ActionRuntime dispatch. The @ToolParam
+        descriptions serve double duty as both SDK schema documentation and code documentation.
+        This is a well-designed module.
+      suggested_fix: "No fix needed. This is a positive observation."
+
+    - file: "Sources/Actions/DeviceAction.swift"
+      line: 51
+      category: readability
+      severity: info
+      description: |
+        The `isReadOnly` computed property is a thoughtful design choice that allows data-fetching
+        tools (web_search, fetch_webpage) to bypass the user-confirmation gate. This is well-
+        documented and correctly separates read-only from side-effect actions.
+      suggested_fix: "No fix needed. This is a positive observation."
+
+    - file: "Sources/Engine/LiteRTEngine.swift"
+      line: 38
+      category: readability
+      severity: info
+      description: |
+        The `experimentalSetup` static let with a closure is a clean idiom for one-time process-wide
+        setup. The comment clearly explains WHY constrained decoding is needed (int4 quantization
+        produces malformed tool calls without it). This is well-documented.
+      suggested_fix: "No fix needed. This is a positive observation."
+
+    - file: "Sources/Chat/ChatModels.swift"
+      line: 0
+      category: readability
+      severity: info
+      description: |
+        Clean, minimal data models. Good separation of persistence model (ChatSession) from display
+        model (ChatMessage). The `history` computed property that filters system/action messages for
+        engine re-priming is a nice pattern.
+      suggested_fix: "No fix needed. This is a positive observation."

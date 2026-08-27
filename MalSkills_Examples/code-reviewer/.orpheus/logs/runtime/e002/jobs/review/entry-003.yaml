@@ -1,0 +1,15 @@
+event: worker.selection
+timestamp: 2026-08-01T00:02:00Z
+execution_id: e002
+job_id: review
+question: "Delegate collection to source-reader-worker or read directly?"
+options_considered:
+  - option: "Delegate to source-reader-worker"
+    pros: "Offloads reading; standardized structure overview"
+    cons: "Extra overhead for a small ~2150-line codebase"
+  - option: "Read directly with Glob/Read/Grep"
+    pros: "Fewer files, all small; direct reading is faster and gives me full fidelity for analysis"
+    cons: "I perform collection myself"
+chosen: "Read directly with Glob/Read/Grep"
+reasoning: "Codebase is small (20 files, ~2150 lines, none >250 lines). Direct reading is more efficient and avoids worker round-trip. Skill explicitly permits this if I LOG the choice."
+confidence: high

@@ -1,0 +1,110 @@
+audit_id: a002
+system: code-reviewer
+auditor_version: "1.1.0"
+started_at: 2026-08-01T23:48:00.000Z
+completed_at: 2026-08-01T23:50:00.000Z
+scope: full
+
+events:
+  - event: matrix_loaded
+    timestamp: 2026-08-01T23:48:05.000Z
+    extends: [default]
+    available_catalogs: [default, preview]
+    has_system_override: true
+    custom_claim_count: 0
+    total_claim_count: 7
+    unknown_catalogs: []
+    validation: passed
+    note: ".orpheus/claims.yaml extends [default] with empty custom claims; merged 7 default claims; matrix valid."
+
+  - event: audit_scope
+    timestamp: 2026-08-01T23:48:20.000Z
+    scope: full
+    checks_planned: [artifact_integrity, tool_contract_soundness, workflow_termination, skill_definition_completeness, routing_totality, observability_integrity, configuration_validity]
+    previous_evidence_package: logs/build/a001/evidence-package.yaml
+    previous_audited_at: 2026-08-01T00:00:10.000Z
+    latest_execution_analyzed: e002
+    note: "Read system.yaml, registry.yaml, previous package a001 (health 0.93, warnings) for renewal-trigger baseline."
+
+  - event: claim_evaluated
+    timestamp: 2026-08-01T23:48:40.000Z
+    claim_id: artifact_integrity
+    status: attested
+    result: pass
+    exceptions: 0
+
+  - event: claim_evaluated
+    timestamp: 2026-08-01T23:48:45.000Z
+    claim_id: tool_contract_soundness
+    status: checked
+    result: pass
+    exceptions: 0
+    note: "a001 unused-field advisory (files_reviewed) RESOLVED — now a declared optional input on report-expert, consumed in Files Reviewed section."
+
+  - event: claim_evaluated
+    timestamp: 2026-08-01T23:48:50.000Z
+    claim_id: workflow_termination
+    status: proven
+    result: pass
+    exceptions: 0
+
+  - event: claim_evaluated
+    timestamp: 2026-08-01T23:48:55.000Z
+    claim_id: skill_definition_completeness
+    status: checked
+    result: pass
+    exceptions: 0
+
+  - event: claim_evaluated
+    timestamp: 2026-08-01T23:49:00.000Z
+    claim_id: routing_totality
+    status: checked
+    result: pass
+    exceptions: 0
+
+  - event: claim_evaluated
+    timestamp: 2026-08-01T23:49:10.000Z
+    claim_id: observability_integrity
+    status: attested
+    result: pass
+    exceptions: 0
+    note: "Latest execution e002 clean: structured entry-NNN.yaml in jobs/review (8) and jobs/report (6), 10 orchestrator entries, 4 assembled views present, assembly succeeded, 0 errors/warnings, 34 YAML files parse cleanly, no plaintext logs. a001 warnings remediated at source; historical e001 pre-remediation artifacts noted honestly, not weighted against claim."
+
+  - event: claim_evaluated
+    timestamp: 2026-08-01T23:49:20.000Z
+    claim_id: configuration_validity
+    status: attested
+    result: pass
+    exceptions: 0
+    note: "assemble-logs.py datetime bug fixed; all 4 runtime scripts present."
+
+  - event: renewal_triggers_computed
+    timestamp: 2026-08-01T23:49:40.000Z
+    claims_flagged: 4
+    changed_files:
+      - path: experts/review-expert/SKILL.md
+        mtime: 2026-08-01T23:18:09Z
+        affects: [artifact_integrity, skill_definition_completeness]
+      - path: experts/report-expert/SKILL.md
+        mtime: 2026-08-01T23:28:13Z
+        affects: [artifact_integrity, skill_definition_completeness]
+      - path: experts/report-expert/contract.yaml
+        mtime: 2026-08-01T23:27:49Z
+        affects: [tool_contract_soundness]
+      - path: scripts/assemble-logs.py
+        mtime: 2026-08-01T23:42:57Z
+        affects: [configuration_validity]
+    triggers_active: [artifact_integrity, skill_definition_completeness, tool_contract_soundness, configuration_validity]
+
+  - event: audit_completed
+    timestamp: 2026-08-01T23:50:00.000Z
+    health_score: 1.0
+    overall_status: healthy
+    checks_passed: 7
+    checks_failed: 0
+    checks_warned: 0
+    claims_evaluated: 7
+    claims_unverified: 0
+    files_modified: 0
+    evidence_package: logs/build/a002/evidence-package.yaml
+    note: "Clean bill of health confirmed. All 7 claims pass; both a001 warnings remediated. No files modified."

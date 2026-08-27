@@ -1,0 +1,29 @@
+event: decision
+timestamp: "2026-08-08T00:10:20Z"
+execution_id: e006
+question: "How should findings be organized and what should the top recommendations be?"
+options_considered:
+  - "Group by file, then severity within each file"
+  - "Group by category (best-practice, bug, readability, complexity) then severity within each"
+  - "Group by severity alone across all categories"
+chosen: "Group by category (best-practice, bug, readability, complexity) then severity within each"
+reasoning: >
+  The skill definition mandates: 'Group them first by category and within each category
+  order by severity (critical -> high -> medium -> low -> info).' This matches the contract.
+  Category-first grouping also lets readers focus on the area most relevant to them (e.g.,
+  security team reads best-practice, developers read bug). Top recommendations derived from
+  the 3 high-severity findings (2 on secret storage, 1 on destructive download) plus
+  recurring medium-severity patterns (silent error swallowing x2, Task lifecycle, Maps API).
+confidence: 0.97
+top_recommendations_derived:
+  - "Move all secrets (HF token, API keys) from UserDefaults to Keychain"
+  - "Download model files to a temporary path before replacing the existing copy"
+  - "Replace silent try? with do/catch + os.Logger for error visibility"
+  - "Cancel orphaned generation Tasks when the chat session changes"
+  - "Bound the in-memory action history to prevent unbounded growth"
+findings_by_category:
+  best-practice: 10
+  bug: 7
+  readability: 6
+  complexity: 5
+  total: 28

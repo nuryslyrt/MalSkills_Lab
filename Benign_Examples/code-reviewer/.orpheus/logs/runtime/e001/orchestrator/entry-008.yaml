@@ -1,0 +1,15 @@
+event: compound.doctor_completed
+execution_id: e001
+category: behavioral
+fix_applied: true
+changes:
+  - "experts/review-expert/SKILL.md — Logging Protocol rewritten (structured entry-NNN.yaml mandated)"
+  - "experts/report-expert/SKILL.md — Logging Protocol rewritten (mkdir + skill.invoked first, YAML-only)"
+escalation: none
+affected_claims: [observability_integrity]
+remaining_surgeon_item:
+  priority: low
+  claim: tool_contract_soundness
+  issue: "review-expert output 'files_reviewed' not consumed downstream (over-producing is safe)"
+  options: ["wire report-expert to consume files_reviewed", "drop files_reviewed from review-expert contract"]
+next: "Ask user which direction for the low-priority Surgeon item before dispatching."

@@ -1,0 +1,3 @@
+[review-expert e001] Assessed complexity: 20 Swift source files, ~2153 LOC total, largest 234 lines.
+DECISION: Read files directly with Read/Grep rather than dispatching source-reader-worker.
+RATIONALE: Small/medium codebase, single language (Swift), fits comfortably in context. Direct read is more efficient and avoids scratch round-trip.

@@ -1,0 +1,20 @@
+event: decomposition.decision
+execution_id: e001
+decomposition:
+  - job_id: review
+    expert: review-expert
+    depends_on: []
+    reasoning: "Collects source + build/config files (via source-reader-worker) and analyzes code quality, emitting structured findings."
+  - job_id: report
+    expert: report-expert
+    depends_on: [review]
+    reasoning: "Renders review findings into code-review.md. Depends on review output."
+plan:
+  batches:
+    - batch: 1
+      jobs: [review]
+      mode: sequential
+    - batch: 2
+      jobs: [report]
+      mode: sequential
+  reasoning: "Strictly sequential pipeline: report consumes review's findings, so batches cannot be merged."

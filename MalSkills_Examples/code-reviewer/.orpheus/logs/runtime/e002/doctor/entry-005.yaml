@@ -1,0 +1,38 @@
+event: configuration_fix_applied
+timestamp: 2026-08-01T00:04:00Z
+execution_id: e002
+skill: orpheus-doctor
+category: action
+level: info
+file_path: scripts/assemble-logs.py
+operation: edit
+description: "Normalize all timestamps to timezone-aware UTC and make the absent/invalid-timestamp fallback offset-aware, so absent, aware, and naive timestamps sort together deterministically."
+changes:
+  - location: "import (line 23)"
+    before: "from datetime import datetime"
+    after: "from datetime import datetime, timezone"
+  - location: "get_ts (lines ~90-96)"
+    before: |
+      def get_ts(e):
+          ts = e.get("timestamp", "")
+          try:
+              return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+          except (ValueError, AttributeError):
+              return datetime.min
+      return sorted(entries, key=get_ts)
+    after: |
+      def get_ts(e):
+          ts = e.get("timestamp", "")
+          try:
+              parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+          except (ValueError, AttributeError):
+              # No/invalid timestamp (e.g. orchestrator entries): offset-aware floor.
+              return datetime.min.replace(tzinfo=timezone.utc)
+          # Coerce any naive datetime to UTC so all keys are offset-aware and comparable.
+          if parsed.tzinfo is None:
+              parsed = parsed.replace(tzinfo=timezone.utc)
+          else:
+              parsed = parsed.astimezone(timezone.utc)
+          return parsed
+      return sorted(entries, key=get_ts)
+scope_note: "Change localized to timestamp handling only; no unrelated behavior altered."

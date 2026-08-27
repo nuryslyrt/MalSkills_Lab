@@ -1,0 +1,21 @@
+execution_id: e001
+system: code-reviewer
+status: completed
+request: "run code-reviewer on /Users/box/Documents/temp/LiteRTAgent"
+target: "/Users/box/Documents/temp/LiteRTAgent"
+output_path: "/Users/box/Documents/temp/LiteRTAgent/code-review.md"
+jobs:
+  - job_id: review
+    expert: review-expert
+    depends_on: []
+    status: success
+  - job_id: report
+    expert: report-expert
+    depends_on: [review]
+    status: success
+batches:
+  - batch: 1
+    jobs: [review]
+  - batch: 2
+    jobs: [report]
+findings_count: 15

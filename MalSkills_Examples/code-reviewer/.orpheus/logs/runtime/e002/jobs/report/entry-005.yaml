@@ -1,0 +1,13 @@
+event: quality.gate
+timestamp: 2026-08-01T00:04:00Z
+execution_id: e002
+job_id: report
+result: pass
+checks:
+  report_written_and_exists: true
+  all_findings_present_none_dropped: true   # 27 of 27 (15 bug + 3 complexity + 3 readability + 6 best-practice)
+  grouped_by_category_ordered_by_severity: true
+  every_finding_has_location_and_fix: true
+  includes_summary_and_top_recommendations: true
+  files_reviewed_section_rendered: true      # files_reviewed present (23), section rendered
+  all_output_fields_present: true            # report_path, top_recommendations, findings_count

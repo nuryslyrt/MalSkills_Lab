@@ -1,0 +1,269 @@
+audit_id: a001
+system: code-reviewer
+audited_at: 2026-08-01T00:00:10.000Z
+auditor_version: "1.1.0"
+claim_matrix_source:
+  extends: [default]
+  available_catalogs: [default, preview]
+  has_system_override: true
+  custom_claim_count: 0
+  total_claim_count: 7
+claim_matrix_version: "1.0"
+overall_status: warnings
+health_score: 0.93
+
+claims:
+  - id: artifact_integrity
+    statement: >
+      Every skill listed in the registry exists on disk with a well-formed
+      SKILL.md and contract.yaml, every path is reachable, and there are no
+      duplicate or orphaned skill entries.
+    validation_method: evidence
+    status: attested
+    evidence:
+      - type: file_hash
+        source: registry.yaml
+        hash: sha256:72851dd2bcb080815b3b16bdf2dc79675f47e2298be2d3bed7abb9b565541726
+        captured_at: 2026-08-01T00:00:04.000Z
+        checker: registry-updater
+        result_summary: "4 skills registered (1 orchestrator, 2 experts, 1 worker); all path+contract files exist; 0 missing, 0 orphaned; names unique; semver valid."
+      - type: file_hash
+        source: orchestrator/SKILL.md
+        hash: sha256:8b774b49bfe12b58c8d3ab5013d75209955a8764b0984d7945ce0bcf92ee03e8
+        captured_at: 2026-08-01T00:00:04.000Z
+      - type: file_hash
+        source: experts/review-expert/SKILL.md
+        hash: sha256:f3326b73adecd42614911312bc6b43d9d5dc8f3087f4c41a7a65ad8f38b36ae1
+        captured_at: 2026-08-01T00:00:04.000Z
+      - type: file_hash
+        source: experts/report-expert/SKILL.md
+        hash: sha256:ae46b09bc0cc0356fa858693efe1cd196b08b5b709272203a2ab897fb78a7784
+        captured_at: 2026-08-01T00:00:04.000Z
+      - type: file_hash
+        source: workers/source-reader-worker/SKILL.md
+        hash: sha256:417122d55f4d797ff87367ab35b1ff4c6834f3ae5d1bcde17b8bcfa7396ab59b
+        captured_at: 2026-08-01T00:00:04.000Z
+    exceptions: []
+    renewal_trigger: >
+      registry.yaml is modified, any SKILL.md or contract.yaml is added,
+      removed, or renamed.
+    next_review_required_on: "registry.yaml:modified OR skill_inventory:changed"
+    owner: surgeon
+    risk_tier: critical
+
+  - id: tool_contract_soundness
+    statement: >
+      Every producer/consumer contract chain has matching required fields
+      with compatible types. No downstream skill declares an input that no
+      upstream skill produces.
+    validation_method: policy-as-code
+    status: checked
+    evidence:
+      - type: contract_chain_check
+        source: "**/contract.yaml"
+        captured_at: 2026-08-01T00:00:05.000Z
+        checker: contract-compat-checker
+        result_summary: >
+          Chain review -> report compatible: report.input.required {findings, structure_overview}
+          both satisfied by review.output.required {findings(array), structure_overview(string)},
+          types match. Worker source-reader-worker output {files, structure_overview} satisfies
+          review-expert. Orchestrator output {report_path, summary} satisfied by orchestrator-level
+          aggregation (report-expert -> report_path; summary carried from review-expert). 1 advisory:
+          review-expert produces 'files_reviewed' unused downstream.
+        detail:
+          field_mapping:
+            "review-expert -> report-expert":
+              findings: "findings -> findings (array -> array, compatible)"
+              structure_overview: "structure_overview -> structure_overview (string -> string, compatible)"
+              files_reviewed: "files_reviewed -> (not consumed, advisory)"
+    exceptions:
+      - id: unused_field_review_expert_files_reviewed
+        severity: advisory
+        description: "review-expert produces 'files_reviewed' but no downstream expert consumes it."
+        recommended_action: "Leave as-is (over-producing is safe), or have report-expert reference files_reviewed for an appendix, or drop from the contract."
+        related_evidence: [contract_chain_check]
+    renewal_trigger: >
+      Any contract.yaml modified, or new skill added with a new contract.
+    next_review_required_on: "**/contract.yaml:modified"
+    owner: surgeon
+    risk_tier: high
+
+  - id: workflow_termination
+    statement: >
+      The job dependency graph is a directed acyclic graph. Execution always
+      terminates in a bounded number of batches; no cycles or dangling
+      references exist.
+    validation_method: proof
+    status: proven
+    evidence:
+      - type: dag_snapshot
+        source: registry.yaml
+        hash: sha256:72851dd2bcb080815b3b16bdf2dc79675f47e2298be2d3bed7abb9b565541726
+        captured_at: 2026-08-01T00:00:06.000Z
+        checker: dag-validator
+        result_summary: >
+          2 jobs, 1 dependency edge. review (no deps) -> report (depends on review).
+          No cycles, no dangling references, no orphaned jobs. Topologically sorts into
+          2 batches: [review], [report]. Longest path: review -> report. is_valid=true.
+    exceptions: []
+    renewal_trigger: >
+      Any dependency edge added, removed, or retargeted. Any change to
+      orchestrator routing rules that could affect job chaining.
+    next_review_required_on: "registry.yaml:modified OR orchestrator/SKILL.md:routing_changed"
+    owner: surgeon
+    risk_tier: critical
+
+  - id: skill_definition_completeness
+    statement: >
+      Every SKILL.md declares required frontmatter fields (name, description,
+      type, version, orpheus.system), every expert SKILL.md contains an
+      Execution Protocol and a Quality Gate, every worker SKILL.md contains
+      a Task Protocol and an Output Format, and every skill contains a
+      Logging Protocol section.
+    validation_method: policy-as-code
+    status: checked
+    evidence:
+      - type: skill_md_audit
+        source: orchestrator/SKILL.md
+        hash: sha256:8b774b49bfe12b58c8d3ab5013d75209955a8764b0984d7945ce0bcf92ee03e8
+        captured_at: 2026-08-01T00:00:07.000Z
+        result_summary: "Frontmatter complete (name,description,type,version,orpheus.system=code-reviewer). Sections: Orchestration Protocol, Logging Protocol, Error Recovery, Anti-Patterns. 170 lines (<500)."
+      - type: skill_md_audit
+        source: experts/review-expert/SKILL.md
+        hash: sha256:f3326b73adecd42614911312bc6b43d9d5dc8f3087f4c41a7a65ad8f38b36ae1
+        captured_at: 2026-08-01T00:00:07.000Z
+        result_summary: "Frontmatter complete. Sections present: Execution Protocol, Quality Gate, Logging Protocol, Error Handling. 117 lines."
+      - type: skill_md_audit
+        source: experts/report-expert/SKILL.md
+        hash: sha256:ae46b09bc0cc0356fa858693efe1cd196b08b5b709272203a2ab897fb78a7784
+        captured_at: 2026-08-01T00:00:07.000Z
+        result_summary: "Frontmatter complete. Sections present: Execution Protocol, Quality Gate, Logging Protocol, Error Handling. 119 lines."
+      - type: skill_md_audit
+        source: workers/source-reader-worker/SKILL.md
+        hash: sha256:417122d55f4d797ff87367ab35b1ff4c6834f3ae5d1bcde17b8bcfa7396ab59b
+        captured_at: 2026-08-01T00:00:07.000Z
+        result_summary: "Frontmatter complete. Sections present: Task Protocol, Output Format, Constraints, Logging Protocol. 104 lines."
+    exceptions: []
+    renewal_trigger: >
+      Any SKILL.md modified, added, or removed.
+    next_review_required_on: "**/SKILL.md:modified"
+    owner: doctor
+    risk_tier: high
+
+  - id: routing_totality
+    statement: >
+      Every expert listed in the registry has at least one orchestrator
+      routing rule that can direct work to it. No ambiguous patterns exist
+      where two rules could match the same input. A catch-all or explicit
+      fallback exists for unmatched requests.
+    validation_method: policy-as-code
+    status: checked
+    evidence:
+      - type: routing_coverage_map
+        source: orchestrator/SKILL.md
+        hash: sha256:8b774b49bfe12b58c8d3ab5013d75209955a8764b0984d7945ce0bcf92ee03e8
+        captured_at: 2026-08-01T00:00:08.000Z
+        result_summary: >
+          Both registry experts have routing rules. review-expert <- "review|analyze|inspect|quality|audit code|lint";
+          report-expert <- "report|write|document|summarize|code-review.md|render findings". Patterns disjoint (no ambiguity).
+          Explicit fallback present ("If no routing rule matches, inform the user"). Available Experts table matches
+          registry expert list. Available Workers summary present.
+        detail:
+          routing:
+            review-expert: "review|analyze|inspect|quality|audit code|lint"
+            report-expert: "report|write|document|summarize|code-review.md|render findings"
+          fallback: "explicit: inform user request does not match a configured expert"
+    exceptions: []
+    renewal_trigger: >
+      Orchestrator SKILL.md routing rules modified, or registry experts
+      list changes.
+    next_review_required_on: "orchestrator/SKILL.md:modified OR registry.yaml:experts_changed"
+    owner: doctor
+    risk_tier: high
+
+  - id: observability_integrity
+    statement: >
+      The .orpheus/logs/ directory structure is correct, every recent
+      execution has assembled log views (timeline, decisions, errors), and
+      no log entry files are corrupted or unreadable.
+    validation_method: evidence
+    status: attested
+    evidence:
+      - type: log_inspection
+        source: logs/runtime/e001
+        captured_at: 2026-08-01T00:00:09.000Z
+        checker: log-analyzer
+        result_summary: >
+          logs/, build/, runtime/ present. Execution e001: all 4 assembled views present
+          (timeline.log.yaml, decisions.log.yaml, errors.log.yaml, execution.log.yaml).
+          orchestrator/ has 6 structured entry-NNN.yaml. errors.log clean (0 errors/warnings).
+          GAPS: jobs/report/ log directory missing (report job left no per-job log dir);
+          jobs/review/ contains a non-standard plaintext 'decision.log' instead of structured
+          entry-NNN.yaml entries. coverage_score ~0.8.
+        detail:
+          assembled_views: [timeline.log.yaml, decisions.log.yaml, errors.log.yaml, execution.log.yaml]
+          orchestrator_entries: 6
+          job_log_dirs_present: [review]
+          job_log_dirs_missing: [report]
+          nonstandard_job_logs: ["jobs/review/decision.log (plaintext, not entry-NNN.yaml)"]
+    exceptions:
+      - id: missing_report_job_log_dir
+        severity: warning
+        description: "Execution e001 has no logs/runtime/e001/jobs/report/ directory; the report job produced no per-job log entries."
+        recommended_action: "Investigate why report-expert did not write entry-NNN.yaml to its log_path. Confirm the dispatch supplied log_path and the expert honored its Logging Protocol."
+        related_evidence: [log_inspection]
+      - id: nonstandard_review_job_log_format
+        severity: warning
+        description: "jobs/review/ logs to a plaintext 'decision.log' rather than structured entry-NNN.yaml files; assembled decision/timeline views cannot fully incorporate it."
+        recommended_action: "Ensure review-expert emits structured entry-NNN.yaml decision entries (question/options_considered/chosen/reasoning/confidence) per its Logging Protocol so the Doctor/Auditor can consume them."
+        related_evidence: [log_inspection]
+    renewal_trigger: >
+      A new execution completes without having assemble-logs.py run, or
+      logs directory structure is altered.
+    next_review_required_on: "logs/runtime:new_execution_without_assembly"
+    owner: doctor
+    risk_tier: medium
+
+  - id: configuration_validity
+    statement: >
+      The system configuration (system.yaml) is well-formed, declares all
+      required fields with valid values, and the generated system is
+      self-contained — .orpheus/scripts/ directory exists with the four
+      runtime scripts (generate-id.py, validate-yaml.py, init-execution.sh,
+      assemble-logs.py).
+    validation_method: evidence
+    status: attested
+    evidence:
+      - type: config_snapshot
+        source: system.yaml
+        hash: sha256:4c5ad86acab5852306bdcc3533754a1f0b4a97f467df826e55548535a1b279d0
+        captured_at: 2026-08-01T00:00:09.000Z
+        result_summary: >
+          system.name='code-reviewer' non-empty. orchestrator.strategy=adaptive (valid),
+          max_retries=2 (valid non-neg int), timeout_seconds=300 (valid positive),
+          escalation=user (valid). logging.level=info (valid); all logging boolean fields
+          are booleans. scripts/ present with all 4 runtime scripts.
+        detail:
+          scripts_present: [assemble-logs.py, generate-id.py, init-execution.sh, validate-yaml.py]
+    exceptions: []
+    renewal_trigger: >
+      system.yaml modified, or scripts/ directory contents change.
+    next_review_required_on: "system.yaml:modified OR scripts/:contents_changed"
+    owner: doctor
+    risk_tier: medium
+
+renewal_triggers_active: []
+
+recommendations:
+  - priority: medium
+    target_expert: doctor
+    action: "Investigate why the report job (execution e001) produced no per-job log directory (logs/runtime/e001/jobs/report/ missing). Verify report-expert receives and honors its log_path per its Logging Protocol."
+    claim: observability_integrity
+  - priority: medium
+    target_expert: doctor
+    action: "Fix review-expert logging: it writes a plaintext jobs/review/decision.log instead of structured entry-NNN.yaml entries, so assembled decision/timeline views miss its reasoning. Ensure structured decision entries (question/options_considered/chosen/reasoning/confidence)."
+    claim: observability_integrity
+  - priority: low
+    target_expert: surgeon
+    action: "Advisory: review-expert output field 'files_reviewed' is not consumed by any downstream skill. Either wire report-expert to use it (e.g., a reviewed-files appendix) or remove it from the contract to keep the chain minimal."
+    claim: tool_contract_soundness

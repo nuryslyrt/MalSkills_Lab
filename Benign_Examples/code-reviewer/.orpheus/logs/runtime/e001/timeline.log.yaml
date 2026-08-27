@@ -1,0 +1,72 @@
+{
+  "execution_id": "e001",
+  "timeline": [
+    {
+      "event": "execution.started",
+      "execution_id": "e001",
+      "request": "run code-reviewer on /Users/box/Documents/temp/LiteRTAgent",
+      "user_context": "",
+      "original_request": "run code-reviewer on /Users/box/Documents/temp/LiteRTAgent",
+      "target_scope": "/Users/box/Documents/temp/LiteRTAgent",
+      "constraints": "[]",
+      "preferences": "[]",
+      "routing_decision": "",
+      "detected_signal_words": "[\"run\", \"review\", \"code-reviewer\"]",
+      "route": "Runner (inline)",
+      "reasoning": ".orpheus/ exists; intent is to execute the existing code-reviewer system against a target project directory."
+    },
+    {
+      "event": "decomposition.decision",
+      "execution_id": "e001",
+      "decomposition": "",
+      "expert": "report-expert",
+      "depends_on": "[review]",
+      "reasoning": "Strictly sequential pipeline: report consumes review's findings, so batches cannot be merged.",
+      "plan": "",
+      "batches": "",
+      "jobs": "[report]",
+      "mode": "sequential"
+    },
+    {
+      "event": "job.dispatched",
+      "execution_id": "e001",
+      "batch": "1",
+      "job_id": "review",
+      "expert": "review-expert",
+      "job_path": ".orpheus/state/execution/e001/jobs/review.yaml",
+      "result_path": ".orpheus/state/execution/e001/results/review.yaml",
+      "note": "Dispatched review-expert subagent for LiteRTAgent. Worker source-reader-worker available for collect stage."
+    },
+    {
+      "event": "job.result_received",
+      "execution_id": "e001",
+      "job_id": "review",
+      "status": "success",
+      "result_path": ".orpheus/state/execution/e001/results/review.yaml",
+      "summary": "21 files reviewed (20 Swift + project.yml), 15 findings (0 critical, 3 high, 4 medium, 6 low, 2 info). Contract fields present: findings, structure_overview, files_reviewed, findings_count, summary.",
+      "contract_check": "passed"
+    },
+    {
+      "event": "job.dispatched",
+      "execution_id": "e001",
+      "batch": "2",
+      "job_id": "report",
+      "expert": "report-expert",
+      "depends_on": "[review]",
+      "dependency_results": "",
+      "review": ".orpheus/state/execution/e001/results/review.yaml",
+      "result_path": ".orpheus/state/execution/e001/results/report.yaml",
+      "output_path": "/Users/box/Documents/temp/LiteRTAgent/code-review.md"
+    },
+    {
+      "event": "execution.completed",
+      "execution_id": "e001",
+      "status": "completed",
+      "jobs_completed": "2",
+      "jobs_failed": "0",
+      "findings_count": "15",
+      "report_path": "/Users/box/Documents/temp/LiteRTAgent/code-review.md",
+      "note": "Both contracts validated: review -> findings/structure_overview/files_reviewed present; report -> report_path/top_recommendations present. code-review.md written (295 lines)."
+    }
+  ]
+}

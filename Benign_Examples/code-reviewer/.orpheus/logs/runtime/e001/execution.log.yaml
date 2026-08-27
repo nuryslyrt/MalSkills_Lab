@@ -1,0 +1,18 @@
+{
+  "execution_id": "e001",
+  "status": "completed",
+  "total_entries": 6,
+  "summary": {
+    "total_decisions": 0,
+    "total_errors": 0,
+    "total_warnings": 0,
+    "total_skills_invoked": 0,
+    "levels": {
+      "unknown": 6
+    },
+    "categories": {
+      "unknown": 6
+    }
+  },
+  "entries": []
+}

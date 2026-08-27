@@ -1,0 +1,38 @@
+event: behavioral_fix_applied
+timestamp: 2026-08-01T00:12:00.000Z
+expert: doctor
+execution_id: e001
+category: behavioral
+fix_summary: >
+  Rewrote the Logging Protocol section in both experts' SKILL.md to make structured
+  logging concrete and mandatory: exact entry-NNN.yaml naming at the exact log_path,
+  create the directory first (mkdir -p), write skill.invoked as entry-001 BEFORE any
+  work (guarantees the per-job dir always exists), and an explicit prohibition on
+  freeform/plaintext .log files (which assemble-logs.py cannot read). No contract.yaml,
+  registry, dependency, or frontmatter changes.
+changes:
+  - file_path: ".orpheus/experts/review-expert/SKILL.md"
+    operation: edit
+    section: "Logging Protocol"
+    before_snippet: "Write log entries as `entry-NNN.yaml` files to your log_path directory. You MUST log: ..."
+    after_snippet: >
+      "You MUST write STRUCTURED YAML log entries — one file per entry — to the exact log_path ...
+      File naming entry-NNN.yaml (zero-padded from 001); Create the directory first (mkdir -p);
+      YAML only — never plaintext (do NOT write decision.log); Write skill.invoked FIRST as entry-001.yaml ..."
+    reason: "Targets warning nonstandard_review_job_log_format: forbids the plaintext decision.log and pins the structured entry-NNN.yaml format so assemble-logs.py captures the review-expert's decisions."
+  - file_path: ".orpheus/experts/report-expert/SKILL.md"
+    operation: edit
+    section: "Logging Protocol"
+    before_snippet: "Write log entries as `entry-NNN.yaml` files to your log_path directory. You MUST log: ..."
+    after_snippet: >
+      "You MUST write STRUCTURED YAML log entries ... Create the directory first (mkdir -p) — the report
+      job's per-job log directory must be created by you; Write skill.invoked FIRST as entry-001.yaml
+      (guarantees logs/runtime/{eid}/jobs/report/ always exists) ..."
+    reason: "Targets warning missing_report_job_log_dir: forces the report-expert to create its per-job log dir and emit entry-001 (skill.invoked) at start, so future report jobs always leave structured entries."
+validation:
+  frontmatter_review_expert: "valid (fences intact, closes line 25; name/type/version/orpheus.system unchanged)"
+  frontmatter_report_expert: "valid (fences intact, closes line 24; name/type/version/orpheus.system unchanged)"
+  contracts_touched: false
+  registry_touched: false
+  dependencies_touched: false
+scope_note: "The tool_contract_soundness advisory (review-expert 'files_reviewed' unused) is STRUCTURAL and out of Doctor scope — left for the Surgeon, per instructions."

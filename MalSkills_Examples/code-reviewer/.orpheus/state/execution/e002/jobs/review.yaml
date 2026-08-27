@@ -1,0 +1,17 @@
+job_id: review
+job_type: review
+expert: review-expert
+status: pending
+retry_count: 0
+depends_on: []
+input:
+  project_path: "/Users/box/Documents/temp/LiteRTAgent"
+  focus_areas: []
+  include_globs: []
+  exclude_globs: []
+user_context:
+  original_request: "run code-reviewer on /Users/box/Documents/temp/LiteRTAgent"
+  constraints: []
+  preferences: []
+  conversation_notes: "Second run (e002) after the Doctor fixed logging instructions and the Surgeon added a 'Files Reviewed' section to the report. Follow the updated Logging Protocol: write structured entry-NNN.yaml files, skill.invoked first."
+  target_scope: "/Users/box/Documents/temp/LiteRTAgent"

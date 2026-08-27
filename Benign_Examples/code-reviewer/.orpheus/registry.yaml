@@ -1,0 +1,32 @@
+system: "code-reviewer"
+version: "1.0.0"
+
+skills:
+  orchestrator:
+    name: code-reviewer-orchestrator
+    path: orchestrator/SKILL.md
+    version: "1.0.0"
+    contract: orchestrator/contract.yaml
+
+  experts:
+    - name: review-expert
+      path: experts/review-expert/SKILL.md
+      version: "1.0.0"
+      contract: experts/review-expert/contract.yaml
+      tags: [review, code-quality, analysis]
+      compatible_workers: [source-reader-worker]
+
+    - name: report-expert
+      path: experts/report-expert/SKILL.md
+      version: "1.0.0"
+      contract: experts/report-expert/contract.yaml
+      tags: [report, writing, presentation]
+      compatible_workers: []
+
+  workers:
+    - name: source-reader-worker
+      path: workers/source-reader-worker/SKILL.md
+      version: "1.0.0"
+      contract: workers/source-reader-worker/contract.yaml
+      tags: [collect, filesystem, source]
+      model_preference: inherit

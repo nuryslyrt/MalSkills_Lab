@@ -1,0 +1,12 @@
+job_id: report
+status: completed
+skill_name: report-expert
+output:
+  report_path: /Users/box/Documents/temp/LiteRTAgent/code-review.md
+  findings_count: 27
+  top_recommendations:
+    - "[High] Stop force-unwrapping/interpolating URLs built from external data (ModelManager.swift:67 force-unwrap on HuggingFace filename; WebServices.swift:137 unencoded model-supplied URL into Jina host). Percent-encode, use URLComponents, validate http(s), replace ! with guarded throw."
+    - "[High] Fix ActionRuntime isolation and singleton coupling: annotate @MainActor to remove mixed-isolation access to confirmBeforeActing/@Published state (ActionRuntime.swift:9), and route tools through a protocol to break the hard singleton dependency and document single-active-conversation (ActionRuntime.swift:10)."
+    - "[High/Medium] Make streaming and downloads cancellable: use continuation.onTermination + Task.isCancelled so cancelling a chat stream tears down sendMessageStream (LiteRTEngine.swift:84); track and cancel the active download in ModelManager.delete() and remove/wire the dead tasks dictionary (ModelManager.swift:26/78)."
+    - "[Medium] Scope action history to the originating session: tag ActionRecords with a session id and filter ChatViewModel's subscription so action bubbles surface in the correct chat (ChatViewModel.swift:33)."
+    - "[Medium] Fix MapKit main-thread violation (ActionExecutor.swift:140) and align advertised skills with reality: implement or disclaim Contacts name resolution (ActionExecutor.swift:30) and reconcile arbitrary-app-open with the LSApplicationQueriesSchemes whitelist (Info.plist:48)."

@@ -1,0 +1,31 @@
+event: diagnosis
+timestamp: 2026-08-01T00:11:00.000Z
+expert: doctor
+execution_id: e001
+question: "What is the root cause of the two observability_integrity warnings, and is it behavioral, structural, transient, or configuration?"
+options_considered:
+  - option: "Structural — orchestrator dispatch does not supply log_path, so experts had nowhere to write."
+    assessment: "REJECTED. Evidence: orchestrator/SKILL.md line 95 includes 'log_path: .orpheus/logs/runtime/{eid}/jobs/{job_id}/' in the dispatch template. log_path was supplied. Not the cause; also would be orchestrator wording, not a contract/registry/dependency change."
+  - option: "Transient — a one-off run-time glitch that will not recur."
+    assessment: "REJECTED. Nothing in errors.log indicates a crash or interruption; review-expert completed and wrote a full result, and report-expert completed and wrote code-review.md (295 lines). The logging deviation is deterministic given the instructions, so it will recur every run."
+  - option: "Configuration — system.yaml logging settings wrong."
+    assessment: "REJECTED. Auditor claim configuration_validity passed (attested); logging.level=info and boolean fields valid. Not a config defect."
+  - option: "Behavioral — the two experts' SKILL.md Logging Protocol instructions are ambiguous/soft, so the experts improvised (review-expert wrote plaintext decision.log; report-expert wrote nothing)."
+    assessment: "ACCEPTED. The instructions name entry-NNN.yaml but do not make it mandatory/concrete: no exact filename pattern tied to the exact log_path, no requirement to create the directory, no requirement to write skill.invoked FIRST, no prohibition on freeform files. Logging behavior driven by SKILL.md instructions is BEHAVIORAL by definition."
+chosen: "Behavioral"
+category: behavioral
+root_cause: >
+  The review-expert and report-expert SKILL.md Logging Protocol sections are underspecified. Although the orchestrator
+  correctly passes log_path, the instructions do not force experts to (a) create the log_path directory, (b) write the
+  FIRST entry (skill.invoked) at start, (c) use the exact entry-NNN.yaml structured filename pattern at that exact path,
+  or (d) refrain from freeform/plaintext logs. Given this latitude, review-expert improvised a single plaintext
+  decision.log (invisible to assemble-logs.py -> decisions.log.yaml shows 0 decisions), and report-expert produced no
+  per-job log directory at all. The fix is to make the logging instructions concrete and mandatory in both SKILL.md files
+  WITHOUT touching any contract.yaml, the registry, or the dependency graph.
+confidence: high
+evidence_refs:
+  - "orchestrator/SKILL.md:95 (log_path supplied)"
+  - "logs/runtime/e001/jobs/review/decision.log (plaintext, non-standard)"
+  - "logs/runtime/e001/jobs/report/ (absent)"
+  - "logs/runtime/e001/decisions.log.yaml (total_decisions: 0 — impact confirmed)"
+  - "experts/review-expert/SKILL.md:97-109 and experts/report-expert/SKILL.md:100-111 (soft wording)"

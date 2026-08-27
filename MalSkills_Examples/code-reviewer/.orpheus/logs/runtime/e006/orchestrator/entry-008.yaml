@@ -1,0 +1,13 @@
+event: execution.completed
+timestamp: "2026-08-08T00:10:01Z"
+execution_id: e006
+system: code-reviewer
+status: completed
+total_duration_seconds: 596
+jobs_completed: 2
+jobs_failed: 0
+batches_completed: 2
+output:
+  report_path: "/Users/box/Documents/temp/LiteRTAgent/code-review.md"
+  findings_count: 28
+  quality_score: 100

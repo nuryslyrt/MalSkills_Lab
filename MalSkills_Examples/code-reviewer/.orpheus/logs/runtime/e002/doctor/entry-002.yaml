@@ -1,0 +1,11 @@
+event: symptom_classification
+timestamp: 2026-08-01T00:01:00Z
+execution_id: e002
+skill: orpheus-doctor
+category: diagnosis
+level: info
+symptom: "Phase 4 log assembly for e002 crashes with TypeError: can't compare offset-naive and offset-aware datetimes."
+target_execution: e002
+target_artifact: scripts/assemble-logs.py
+failing_command: "python3 .orpheus/scripts/assemble-logs.py e002 --base-path .orpheus"
+initial_classification: "Deterministic crash in the system's own assembler script -> likely CONFIGURATION (system setup / script defect), pending evidence."

@@ -1,0 +1,17 @@
+event: execution.started
+timestamp: "2026-08-08T00:00:00Z"
+execution_id: e005
+phase: decomposition
+decision:
+  description: "Decomposed user request into 2 jobs: review (review-expert) and report (report-expert)"
+  reasoning: "The code-reviewer pipeline has two stages - review collects and analyzes source files, report renders findings into code-review.md. Report depends on review."
+  jobs:
+    - job_id: review
+      expert: review-expert
+      dependencies: []
+    - job_id: report
+      expert: report-expert
+      dependencies: [review]
+user_context:
+  original_request: "run code-reviewer for /Users/box/Documents/temp/LiteRTAgent"
+  target_scope: "/Users/box/Documents/temp/LiteRTAgent"

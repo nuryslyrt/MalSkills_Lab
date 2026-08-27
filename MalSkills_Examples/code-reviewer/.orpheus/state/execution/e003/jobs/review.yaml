@@ -1,0 +1,11 @@
+job_id: review
+job_type: review
+assigned_expert: review-expert
+status: pending
+retry_count: 0
+dependencies: []
+input:
+  project_path: "/Users/box/Documents/temp/LiteRTAgent"
+expected_output:
+  format: yaml
+  required_fields: [findings, structure_overview, files_reviewed]

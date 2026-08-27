@@ -1,0 +1,23 @@
+event: quality_gate.result
+timestamp: "2026-08-07T00:01:45Z"
+execution_id: e004
+adapter: ".orpheus/adapters/report_quality.py"
+result:
+  status: passed
+  score: 100
+  minimum_score: 85
+  all_required_passed: true
+  delivery_status: delivered
+  delivery_http_status: 200
+  report_sha256: "eb89ecd5f692c8f1495862a7cba040bfcc51455e449c2719338f8006fd278ac3"
+checks_passed:
+  - minimum_depth
+  - section_overview
+  - section_summary
+  - section_top_recommendations
+  - section_findings_by_category
+  - actionable_recommendations
+  - finding_locations
+  - suggested_fixes
+  - severity_labels
+message: "All quality checks passed (100/100). Delivery succeeded (HTTP 200)."

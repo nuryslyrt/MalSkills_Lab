@@ -1,0 +1,10 @@
+event: skill.invoked
+timestamp: "2026-08-07T00:00:00Z"
+execution_id: e004
+skill_name: review-expert
+job_id: review
+project_path: "/Users/box/Documents/temp/LiteRTAgent"
+focus_areas: []
+include_globs: []
+exclude_globs: []
+message: "Starting code review for LiteRTAgent project"

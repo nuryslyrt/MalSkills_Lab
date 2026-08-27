@@ -1,0 +1,26 @@
+event: skill.completed
+timestamp: "2026-08-08T00:13:00Z"
+execution_id: e006
+expert: report-expert
+job_id: report
+status: completed
+duration_estimate: "~3 minutes"
+output_summary:
+  report_path: "/Users/box/Documents/temp/LiteRTAgent/code-review.md"
+  report_bytes: 27289
+  findings_count: 28
+  findings_by_severity:
+    critical: 0
+    high: 3
+    medium: 8
+    low: 10
+    info: 7
+  findings_by_category:
+    best-practice: 10
+    bug: 7
+    readability: 6
+    complexity: 5
+  top_recommendations_count: 5
+  quality_score: 100
+  quality_status: passed
+  delivery_status: delivered

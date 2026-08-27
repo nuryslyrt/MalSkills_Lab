@@ -1,0 +1,7 @@
+event: skill.invoked
+timestamp: 2026-08-01T00:00:00Z
+execution_id: e002
+skill: orpheus-doctor
+job_id: doctor
+target: scripts/assemble-logs.py
+note: "First action per Logging Protocol. Doctor invoked to diagnose e002 Phase 4 log-assembly failure."

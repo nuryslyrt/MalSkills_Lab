@@ -1,0 +1,532 @@
+job_id: review
+status: completed
+expert: review-expert
+execution_id: e005
+timestamp: "2026-08-08T00:00:12Z"
+
+structure_overview: |
+  LiteRTAgent is a SwiftUI iOS application (iOS 17+, XcodeGen-based build) that runs
+  on-device LLM inference via Google's LiteRT-LM SDK (v0.12.0). It provides a chat
+  interface backed by Gemma 4, with native tool-calling capability for device actions
+  (messaging, email, phone calls, calendar, reminders, maps, web search, URL opening).
+
+  Architecture is well-modularized into six logical groups:
+
+  - **App** (LiteRTAgentApp.swift): Entry point and AppState which manages model
+    lifecycle, GPU/CPU backend fallback, and conversation (re)configuration.
+  - **Engine** (LiteRTEngine.swift): The sole LiteRT-LM SDK touchpoint. An actor
+    wrapping Engine and Conversation, with streaming support.
+  - **Chat** (ChatViewModel, ChatModels, ChatStore): MVVM chat layer with persistence
+    (JSON per session in Application Support/Chats), history replay, and action-bubble
+    integration.
+  - **Models** (ModelCatalog, ModelManager): Model catalog, HuggingFace download with
+    byte-accurate progress, and on-disk caching with intelligent .litertlm file discovery.
+  - **Actions** (ActionTools, DeviceAction, ActionRuntime, ActionExecutor, SkillCatalog,
+    WebServices): Tool definitions conforming to LiteRT-LM's Tool protocol, a typed
+    DeviceAction enum, confirmation gate via ActionRuntime, and execution via iOS APIs.
+    Web search implements a Tavily/Serper/DuckDuckGo fallback chain.
+  - **UI** (ContentView, ChatView, ConfigView, HistoryView, ModelsView, SettingsView,
+    SkillsView): SwiftUI tab-based interface with live test-bench capabilities for
+    prompt/sampling tuning.
+
+  Total: ~2,163 lines of Swift across 18 source files, plus 3 config files.
+
+files_reviewed:
+  - .env
+  - .gitignore
+  - project.yml
+  - Sources/App/LiteRTAgentApp.swift
+  - Sources/App/Info.plist
+  - Sources/App/LiteRTAgent.entitlements
+  - Sources/Engine/LiteRTEngine.swift
+  - Sources/Chat/ChatViewModel.swift
+  - Sources/Chat/ChatModels.swift
+  - Sources/Chat/ChatStore.swift
+  - Sources/Models/ModelCatalog.swift
+  - Sources/Models/ModelManager.swift
+  - Sources/Actions/ActionTools.swift
+  - Sources/Actions/DeviceAction.swift
+  - Sources/Actions/ActionRuntime.swift
+  - Sources/Actions/ActionExecutor.swift
+  - Sources/Actions/SkillCatalog.swift
+  - Sources/Actions/WebServices.swift
+  - Sources/UI/ContentView.swift
+  - Sources/UI/ChatView.swift
+  - Sources/UI/ConfigView.swift
+  - Sources/UI/HistoryView.swift
+  - Sources/UI/ModelsView.swift
+  - Sources/UI/SettingsView.swift
+  - Sources/UI/SkillsView.swift
+
+findings_count: 20
+
+summary: |
+  Overall code health is GOOD with one critical and two high-severity issues.
+
+  The codebase demonstrates strong architectural discipline: clean module boundaries,
+  single-file SDK isolation, proper SwiftUI patterns (MVVM, environment objects,
+  @StateObject), and thoughtful error handling throughout. The LiteRT-LM integration
+  is well-documented with version pinning and API surface commentary. The
+  GPU-to-CPU fallback and simulator detection are handled correctly.
+
+  The critical issue is a leaked AWS secret in an unprotected .env file. The two high-
+  severity issues are API keys stored in unencrypted UserDefaults (should use Keychain)
+  and insufficient URL validation on model-generated inputs. The medium-severity issues
+  center around a date-parsing bug that would reject the tool descriptions' own example
+  format, missing streaming cancellation, and concurrency annotation gaps. Low and info
+  findings are minor style and maintainability notes.
+
+  Confidence: 0.92. The review covers all four quality dimensions across every file.
+  No files were skipped.
+
+findings:
+  # ── CRITICAL ──────────────────────────────────────────────────────────────
+
+  - file: ".env"
+    line: 1
+    category: best-practice
+    severity: critical
+    description: |
+      The .env file contains a plaintext AWS secret access key
+      (AWS_SECRET_ACCESS_KEY=NURGUCU_v2_key_d34e9e9cce5fac8a). The file is currently
+      untracked by git but .gitignore does not list .env, so any `git add .` or
+      `git add -A` will commit it. If this key is live, it must be rotated immediately.
+      Secrets in repositories are the #1 cause of cloud account compromise.
+    suggested_fix: |
+      1. Add `.env` to .gitignore immediately.
+      2. Delete the .env file or replace it with a .env.example containing placeholder
+         values (e.g., AWS_SECRET_ACCESS_KEY=your_key_here).
+      3. If the key was ever committed (check `git log --all -- .env`), rotate it in
+         the AWS console immediately.
+      4. Use environment variables or a secrets manager at runtime; never store real
+         credentials in repository files.
+
+  # ── HIGH ──────────────────────────────────────────────────────────────────
+
+  - file: "Sources/Models/ModelManager.swift"
+    line: 21
+    category: best-practice
+    severity: high
+    description: |
+      The HuggingFace access token is stored in plaintext UserDefaults
+      (UserDefaults.standard, key "hfToken"). UserDefaults is an unencrypted plist file
+      that is included in unencrypted device backups, accessible via MDM, and readable
+      by any process with the same app group. Bearer tokens grant full API access to the
+      user's HuggingFace account, including private models and organization repos.
+    suggested_fix: |
+      Store the token in the iOS Keychain instead of UserDefaults. Replace the
+      @Published property with a Keychain-backed accessor:
+
+        import Security
+
+        private static func keychainSave(_ token: String, for key: String) { ... }
+        private static func keychainLoad(_ key: String) -> String? { ... }
+
+        @Published var hfToken: String = Self.keychainLoad("hfToken") ?? "" {
+            didSet { Self.keychainSave(hfToken, for: "hfToken") }
+        }
+
+      Apply the same pattern to the Tavily, Serper, and Jina API keys in
+      SettingsView.swift (currently using @AppStorage, which is also UserDefaults).
+
+  - file: "Sources/Actions/ActionExecutor.swift"
+    line: 161
+    category: best-practice
+    severity: high
+    description: |
+      The openScheme helper, used by OpenURLTool and OpenAppTool, passes model-
+      generated strings directly to UIApplication.shared.open without validation beyond
+      basic URL parsing. A prompt-injected or hallucinated model output could open
+      arbitrary URL schemes (e.g., itms-services:// for enterprise provisioning profiles,
+      or custom schemes that trigger side effects in installed apps). The openApp tool
+      accepts any scheme string. While iOS sandboxing provides a baseline, the
+      confirmation gate only fires when confirmBeforeActing is true, and read-only
+      tools skip it entirely.
+    suggested_fix: |
+      Add an allowlist of permitted URL schemes to openScheme:
+
+        private let allowedSchemes: Set<String> = [
+            "tel", "sms", "mailto", "maps", "comgooglemaps",
+            "http", "https", "music", "shortcuts"
+        ]
+
+        private func openScheme(_ string: String, label: String) -> Result {
+            guard let url = URL(string: string),
+                  let scheme = url.scheme?.lowercased(),
+                  allowedSchemes.contains(scheme) else {
+                return .failed("Blocked scheme: \(string)")
+            }
+            ...
+        }
+
+      For openApp, always require user confirmation regardless of the
+      confirmBeforeActing setting (override isReadOnly for openApp).
+
+  # ── MEDIUM ────────────────────────────────────────────────────────────────
+
+  - file: "Sources/Actions/ActionExecutor.swift"
+    line: 203
+    category: bug
+    severity: medium
+    description: |
+      FlexibleISO.date(from:) only handles ISO-8601 strings with a timezone designator
+      (the Z or +HH:MM suffix), because both formatter configurations use
+      .withInternetDateTime. However, the tool parameter descriptions provide examples
+      without timezone designators (e.g., "2026-06-02T15:00:00"), and on-device int4
+      models are unlikely to reliably produce the timezone suffix. Any date string without
+      a timezone will fail to parse, causing the calendar event or reminder to fail with
+      "Couldn't parse event date."
+    suggested_fix: |
+      Add a third fallback that parses date-only strings (no timezone), treating them
+      as local time:
+
+        static func date(from string: String) -> Date? {
+            // Try with fractional seconds + timezone
+            let withFraction = ISO8601DateFormatter()
+            withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let d = withFraction.date(from: string) { return d }
+            // Try standard Internet date-time
+            let plain = ISO8601DateFormatter()
+            plain.formatOptions = [.withInternetDateTime]
+            if let d = plain.date(from: string) { return d }
+            // Try without timezone (treat as local)
+            let local = DateFormatter()
+            local.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+            local.locale = Locale(identifier: "en_US_POSIX")
+            return local.date(from: string)
+        }
+
+  - file: "Sources/Chat/ChatViewModel.swift"
+    line: 59
+    category: bug
+    severity: medium
+    description: |
+      The streaming Task in send() cannot be cancelled by the user. Once generation
+      starts, there is no mechanism to stop it -- the user must wait for the full
+      response. For multi-GB on-device models generating at ~20 tokens/sec, a long
+      response could take 30+ seconds with no way to interrupt. The UI shows an
+      ellipsis but no stop button.
+    suggested_fix: |
+      Store the Task handle and add a cancel method:
+
+        private var streamTask: Task<Void, Never>?
+
+        func send(_ text: String) {
+            ...
+            streamTask = Task {
+                do {
+                    for try await chunk in await engine.stream(trimmed) {
+                        guard !Task.isCancelled else { break }
+                        if messages.indices.contains(assistantIndex) {
+                            messages[assistantIndex].text += chunk
+                        }
+                    }
+                    ...
+                } catch { ... }
+                isGenerating = false; persist()
+            }
+        }
+
+        func stopGenerating() {
+            streamTask?.cancel()
+            isGenerating = false
+        }
+
+      Then add a stop button in ChatView's inputBar when isGenerating is true.
+
+  - file: "Sources/UI/ContentView.swift"
+    line: 35
+    category: bug
+    severity: medium
+    description: |
+      Force-unwrap of appState.engine! on line 35. While it is inside a guard
+      (case .ready where appState.engine != nil), force unwraps are fragile under
+      refactoring. If the guard condition is ever changed or the code restructured,
+      this becomes a runtime crash. SwiftUI body evaluation must never crash.
+    suggested_fix: |
+      Use optional binding instead:
+
+        case .ready:
+            if let engine = appState.engine {
+                VStack(spacing: 0) {
+                    backendBanner
+                    ChatView(viewModel: ChatViewModel(engine: engine, store: chatStore))
+                        .id(chatStore.currentSessionID)
+                }
+            }
+
+  - file: "Sources/Actions/ActionRuntime.swift"
+    line: 9
+    category: best-practice
+    severity: medium
+    description: |
+      ActionRuntime is a plain class with a shared singleton but lacks formal actor
+      isolation. Its mutable state (pendingApproval, history, confirmBeforeActing) is
+      accessed from multiple concurrency domains: Tool.run() calls perform() from
+      SDK-managed tasks, while UI code accesses it from @MainActor. The code works
+      correctly because all state mutations are individually dispatched to MainActor,
+      but this implicit contract is fragile and not enforced by the compiler. Swift 6
+      strict concurrency checking will flag this.
+    suggested_fix: |
+      Mark the class @MainActor:
+
+        @MainActor
+        final class ActionRuntime: ObservableObject { ... }
+
+      Then mark perform() as nonisolated and use explicit MainActor hops only where
+      needed, or make it an actor with @Published wrappers adapted to ObservableObject.
+
+  - file: "Sources/UI/SettingsView.swift"
+    line: 8
+    category: best-practice
+    severity: medium
+    description: |
+      Tavily, Serper, and Jina API keys are stored via @AppStorage, which writes to
+      unencrypted UserDefaults. This is the same vulnerability as the HuggingFace token
+      in ModelManager. All four API keys should use the Keychain.
+    suggested_fix: |
+      Replace @AppStorage with Keychain-backed @State properties and a shared
+      KeychainService helper. On appear, load from Keychain; on change, write to
+      Keychain. Alternatively, create a KeychainStorage property wrapper that mirrors
+      @AppStorage's interface but uses SecItemAdd/SecItemCopyMatching.
+
+  - file: "project.yml"
+    line: 41
+    category: best-practice
+    severity: medium
+    description: |
+      ENABLE_USER_SCRIPT_SANDBOXING is set to NO. While this may be needed for certain
+      build scripts, disabling user script sandboxing allows Run Script build phases to
+      access the network, user files, and other system resources unrestricted. This
+      weakens the build-time security posture and was flagged as a concern by Apple
+      starting in Xcode 14.
+    suggested_fix: |
+      If no custom Run Script phases require unsandboxed access, remove the line or
+      set it to YES:
+
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+      If XcodeGen or another tool requires it, document why in a comment.
+
+  - file: "Sources/Actions/ActionExecutor.swift"
+    line: 145
+    category: best-practice
+    severity: medium
+    description: |
+      Map URLs in openMapsSearch (line 145) and openDirections (line 154) use the http://
+      scheme for maps.apple.com. While Apple Maps likely redirects to HTTPS, the initial
+      request travels unencrypted, exposing the user's search query or destination to
+      network observers. iOS App Transport Security may block plain HTTP depending on
+      the ATS configuration.
+    suggested_fix: |
+      Change both URLs to use https://:
+
+        // Line 145:
+        UIApplication.shared.open(URL(string: "https://maps.apple.com/?q=\(q)")!)
+
+        // Line 154:
+        let url = URL(string: "https://maps.apple.com/?daddr=\(q)&dirflg=\(dirflg)")!
+
+  - file: "Sources/Models/ModelCatalog.swift"
+    line: 73
+    category: complexity
+    severity: medium
+    description: |
+      AgentSettings includes a version key ("AgentSettings.v2") for UserDefaults
+      serialization but provides no migration path from v1 or handling for future
+      versions. If the schema changes (new fields, removed fields, type changes), the
+      JSONDecoder will silently fail and return the default settings, potentially
+      losing the user's carefully tuned prompt, sampling parameters, and skill selection
+      without warning.
+    suggested_fix: |
+      Add a version field to the Codable struct and implement explicit migration:
+
+        struct AgentSettings: Codable, Equatable {
+            var version: Int = 2
+            ...
+            static func load() -> AgentSettings {
+                guard let data = UserDefaults.standard.data(forKey: key) else { return .default }
+                // Try current version first
+                if let decoded = try? JSONDecoder().decode(AgentSettings.self, from: data) {
+                    return decoded
+                }
+                // Try migrating from v1
+                if let v1 = try? JSONDecoder().decode(AgentSettingsV1.self, from: data) {
+                    return v1.migrated()
+                }
+                return .default
+            }
+        }
+
+  # ── LOW ───────────────────────────────────────────────────────────────────
+
+  - file: "Sources/Actions/WebServices.swift"
+    line: 140
+    category: readability
+    severity: low
+    description: |
+      Line 140 contains `_ = target`, a dead binding. The `target` URL is created only
+      to validate parsing but is never used. The intent (URL validation) is not obvious
+      from the code.
+    suggested_fix: |
+      Remove the unused binding and keep only the guard:
+
+        guard URL(string: normalized) != nil,
+              let readerURL = URL(string: "https://r.jina.ai/\(normalized)") else {
+            return Outcome(text: "Invalid URL: \(rawURL)", failed: true)
+        }
+
+  - file: "Sources/Actions/ActionExecutor.swift"
+    line: 137
+    category: bug
+    severity: low
+    description: |
+      openMapsSearch starts an asynchronous MKLocalSearch but returns
+      .launched("Opening Maps...") immediately before the search completes. If the
+      search finds no results and falls back to a URL-based map open (line 144),
+      there is a delay between the "Opening Maps" feedback and the actual map launch.
+      If both the search and the fallback fail, no error is reported.
+    suggested_fix: |
+      Convert to async/await using withCheckedContinuation to await the search result
+      before returning:
+
+        private func openMapsSearch(_ query: String) async -> Result {
+            let req = MKLocalSearch.Request()
+            req.naturalLanguageQuery = query
+            do {
+                let response = try await MKLocalSearch(request: req).start()
+                if let item = response.mapItems.first {
+                    item.openInMaps()
+                    return .launched("Opening Maps for \"\(query)\".")
+                }
+            } catch { }
+            // Fallback
+            let q = query.addingPercentEncoding(...) ?? ""
+            UIApplication.shared.open(URL(string: "https://maps.apple.com/?q=\(q)")!)
+            return .launched("Opening Maps for \"\(query)\".")
+        }
+
+  - file: "Sources/Chat/ChatStore.swift"
+    line: 74
+    category: readability
+    severity: low
+    description: |
+      The save method silently swallows encoding and I/O errors with `try?` on lines
+      74-75. If persistence fails (e.g., disk full, permission issue), the user's
+      conversation is lost without any indication. Similar silent suppression occurs
+      in the dir computed property (line 65) and delete (line 57).
+    suggested_fix: |
+      At minimum, log save failures so they are diagnosable. For user-facing impact,
+      surface a save-failure state:
+
+        private func save(_ session: ChatSession) {
+            do {
+                let data = try JSONEncoder().encode(session)
+                try data.write(to: Self.fileURL(for: session.id), options: .atomic)
+            } catch {
+                print("[ChatStore] Failed to save session \(session.id): \(error)")
+                // Optionally: publish a @Published saveError for UI to display
+            }
+        }
+
+  - file: "Sources/Models/ModelManager.swift"
+    line: 165
+    category: complexity
+    severity: low
+    description: |
+      FileDownloader conforms to NSObject and URLSessionDownloadDelegate, creating a
+      tight coupling between the download lifecycle and delegate callbacks. The class
+      uses CheckedContinuation which works but adds complexity. If the download is
+      cancelled externally or the URLSession is deallocated before didCompleteWithError
+      fires, the continuation may never resume, causing the calling Task to hang
+      indefinitely.
+    suggested_fix: |
+      Use URLSession.shared.download(for:delegate:) with the newer async/await API
+      (available since iOS 15) which handles cancellation and lifecycle automatically:
+
+        let (tempURL, response) = try await URLSession.shared.download(
+            for: authorizedRequest(remote),
+            delegate: progressReporter
+        )
+
+      If byte-accurate progress is still needed, use a simple
+      URLSessionTaskDelegate for progress updates.
+
+  - file: "Sources/Chat/ChatViewModel.swift"
+    line: 19
+    category: complexity
+    severity: low
+    description: |
+      ChatViewModel is instantiated inline in the parent view's body
+      (ContentView line 35), meaning the initializer closure runs on every SwiftUI body
+      re-evaluation. SwiftUI's @StateObject mitigates this by only using the first value
+      and discarding subsequent initializations, but the work done in the init (loading
+      from ChatStore, subscribing to ActionRuntime) still executes unnecessarily on
+      every re-render before being thrown away.
+    suggested_fix: |
+      Move ChatViewModel creation to a factory closure or use @StateObject with a
+      lazy-initialized wrapper to defer creation:
+
+        @StateObject private var viewModel: ChatViewModel
+
+        init(engine: LiteRTEngine, store: ChatStore) {
+            _viewModel = StateObject(wrappedValue: ChatViewModel(engine: engine, store: store))
+        }
+
+      This ensures the initializer only runs when the view identity changes (controlled
+      by .id()), not on every body pass.
+
+  - file: ".gitignore"
+    line: 0
+    category: best-practice
+    severity: low
+    description: |
+      The .gitignore file does not include .env or other common secret-bearing file
+      patterns (.env.local, .env.*.local, *.key, *.pem). While .env is currently
+      untracked, a future `git add -A` would commit it along with any secrets.
+    suggested_fix: |
+      Add these patterns to .gitignore:
+
+        # Secrets / environment
+        .env
+        .env.*
+        *.key
+        *.pem
+        *.p12
+
+  # ── INFO ──────────────────────────────────────────────────────────────────
+
+  - file: "Sources/Engine/LiteRTEngine.swift"
+    line: 0
+    category: readability
+    severity: info
+    description: |
+      Excellent SDK isolation: all LiteRT-LM imports and API calls are confined to
+      this single file (plus the Tool protocol conformances in ActionTools.swift).
+      The API surface is documented in the header comments and cross-referenced in
+      the README. The HistoryTurn struct is kept SDK-free so callers never import
+      LiteRTLM directly. This is a model pattern for third-party SDK integration.
+    suggested_fix: "No change needed. This is a positive observation."
+
+  - file: "Sources/Actions/DeviceAction.swift"
+    line: 0
+    category: readability
+    severity: info
+    description: |
+      The DeviceAction enum provides a clean, typed representation of all device
+      actions with derived properties (summary, isReadOnly, skillName). The separation
+      between the typed action model, the Tool protocol conformances (ActionTools), and
+      the executor (ActionExecutor) is well-designed and makes each concern independently
+      testable.
+    suggested_fix: "No change needed. This is a positive observation."
+
+  - file: "Sources/App/LiteRTAgentApp.swift"
+    line: 0
+    category: complexity
+    severity: info
+    description: |
+      The AppState.loadAgent method handles GPU/CPU fallback, simulator detection, and
+      error messaging in a clean, linear flow. The #if targetEnvironment(simulator)
+      compile-time branching is the correct pattern for this, and the fallback note
+      messaging covers all cases (simulator override, device fallback, clean load).
+    suggested_fix: "No change needed. This is a positive observation."

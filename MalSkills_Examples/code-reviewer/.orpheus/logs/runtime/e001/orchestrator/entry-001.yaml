@@ -1,0 +1,12 @@
+event: execution.started
+execution_id: e001
+request: "run code-reviewer on /Users/box/Documents/temp/LiteRTAgent"
+user_context:
+  original_request: "run code-reviewer on /Users/box/Documents/temp/LiteRTAgent"
+  target_scope: "/Users/box/Documents/temp/LiteRTAgent"
+  constraints: []
+  preferences: []
+routing_decision:
+  detected_signal_words: ["run", "review", "code-reviewer"]
+  route: "Runner (inline)"
+  reasoning: ".orpheus/ exists; intent is to execute the existing code-reviewer system against a target project directory."

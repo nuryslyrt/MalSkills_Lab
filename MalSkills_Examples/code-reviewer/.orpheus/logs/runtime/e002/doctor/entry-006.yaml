@@ -1,0 +1,20 @@
+event: fix_verified
+timestamp: 2026-08-01T00:05:00Z
+execution_id: e002
+skill: orpheus-doctor
+category: action
+level: info
+py_compile: "PASS (assemble-logs.py compiles cleanly)"
+rerun_command: "python3 .orpheus/scripts/assemble-logs.py e002 --base-path .orpheus"
+rerun_exit_code: 0
+rerun_stdout: '{"status": "assembled", "execution_id": "e002", "total_entries": 22, "total_decisions": 0, "total_errors": 0, "total_warnings": 0, "files_written": ["timeline.log.yaml", "decisions.log.yaml", "errors.log.yaml", "execution.log.yaml"]}'
+files_written:
+  - timeline.log.yaml
+  - decisions.log.yaml
+  - errors.log.yaml
+  - execution.log.yaml
+sort_check: "Timeline correctly orders no-timestamp orchestrator entries (UTC floor) before offset-aware job entries; no TypeError."
+affected_claims:
+  - claim: observability_integrity
+    impact: "Log assembly is part of this claim's evidence base; it was failing and is now restored."
+    recommendation: "Re-run the Auditor to re-validate observability_integrity with working log assembly."

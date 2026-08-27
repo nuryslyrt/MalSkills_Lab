@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proof Collector</title>
+<style>
+  :root{ --bg:#0b0f14; --panel:#121924; --line:#1f2a37; --fg:#e6edf3; --mut:#7d8da3;
+         --red:#ff4d4f; --amber:#f5a623; --green:#22c55e; --blue:#38bdf8; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+  header{position:sticky;top:0;background:linear-gradient(#0b0f14,#0b0f14ee);border-bottom:1px solid var(--line);
+         padding:12px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;z-index:5}
+  h1{font-size:15px;letter-spacing:.14em;margin:0;font-weight:700}
+  h1 .sub{color:var(--mut);font-weight:400;letter-spacing:.06em}
+  .live{display:inline-flex;align-items:center;gap:7px;color:var(--green)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 #22c55e88;animation:p 1.6s infinite}
+  .dot.off{background:var(--mut);animation:none;box-shadow:none}
+  @keyframes p{0%{box-shadow:0 0 0 0 #22c55e88}70%{box-shadow:0 0 0 8px #22c55e00}100%{box-shadow:0 0 0 0 #22c55e00}}
+  .meta{color:var(--mut)} .meta b{color:var(--fg);font-weight:600}
+  .spacer{flex:1}
+  button{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;
+         padding:5px 10px;cursor:pointer;font:inherit} button:hover{border-color:var(--blue)}
+  main{max-width:1000px;margin:0 auto;padding:18px}
+  .endpoint{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--blue);
+            border-radius:10px;padding:12px 15px;margin:0 0 14px;display:none}
+  .endpoint .lbl{color:var(--mut);font-size:11px;letter-spacing:.08em;display:block;margin-bottom:6px}
+  .endpoint .url{color:var(--blue);word-break:break-all;font-size:13px;user-select:all;-webkit-user-select:all}
+  .endpoint .url.masked{color:var(--mut)}
+  .endpoint .acts{margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .endpoint .acts button{font-size:12px;padding:4px 9px}
+  .endpoint .warn{color:var(--amber);font-size:11.5px}
+  .empty{color:var(--mut);text-align:center;padding:60px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:12px 0;
+        border-left:4px solid var(--mut);animation:in .5s ease}
+  .card.canary{border-left-color:var(--red)} .card.callback{border-left-color:var(--amber)}
+  .card.flash{animation:flash 1.1s ease}
+  @keyframes in{from{opacity:0;transform:translateY(-6px)}to{opacity:1}}
+  @keyframes flash{0%{background:#3a1420}30%{background:#241019}100%{background:var(--panel)}}
+  .row1{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .seq{color:var(--mut)} .time{color:var(--mut);font-size:12px}
+  .badge{font-size:11px;letter-spacing:.08em;padding:2px 8px;border-radius:999px;font-weight:700}
+  .badge.canary{background:#3a1420;color:var(--red)} .badge.callback{background:#3a2a12;color:var(--amber)}
+  .summary{margin:8px 0 6px;font-size:14px}
+  .kv{color:var(--mut);font-size:12px;display:flex;gap:14px;flex-wrap:wrap}
+  .kv b{color:var(--fg)}
+  .canval{margin-top:10px;background:#160b10;border:1px solid #3a1420;border-radius:6px;padding:8px 10px;
+          color:var(--red);word-break:break-all}
+  .canval .lbl{color:var(--mut);font-size:11px;letter-spacing:.06em;display:block;margin-bottom:3px}
+  .chain{margin-top:10px;color:var(--green);font-size:11px;letter-spacing:.06em}
+  pre.doc{margin:10px 0 0;background:#0e141c;border:1px solid var(--line);border-radius:6px;padding:10px;
+          max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:#cfe3ff;font-size:12.5px}
+  .acts{margin-top:10px;display:flex;gap:8px}
+  .acts button{font-size:12px;padding:4px 9px}
+  #flash{position:fixed;inset:0 0 auto 0;display:none;justify-content:center;pointer-events:none;z-index:9}
+  #flash .banner{margin-top:64px;background:#ff4d4f;color:#160b10;font-weight:800;letter-spacing:.14em;
+                 padding:10px 22px;border-radius:8px;box-shadow:0 8px 30px #ff4d4f55;animation:pop 1.4s ease}
+  @keyframes pop{0%{opacity:0;transform:translateY(-16px) scale(.9)}12%{opacity:1;transform:none}
+                 80%{opacity:1}100%{opacity:0}}
+</style>
+</head>
+<body>
+<header>
+  <h1>PROOF&nbsp;COLLECTOR <span class="sub">/ out-of-band monitor</span></h1>
+  <span class="live" id="live"><span class="dot" id="dot"></span><span id="livetxt">LIVE</span></span>
+  <span class="meta" id="hstat">connecting…</span>
+  <span class="spacer"></span>
+  <span class="meta"><b id="count">0</b> events</span>
+  <button id="clearview">clear view</button>
+</header>
+<div id="flash"><div class="banner">&#9673;&nbsp; EXFIL RECEIVED</div></div>
+<main>
+  <section class="endpoint" id="ep">
+    <span class="lbl">YOUR INGEST ENDPOINT &mdash; point your planted system here</span>
+    <div class="url masked" id="epurl"></div>
+    <div class="acts">
+      <button id="epreveal">reveal key</button>
+      <button id="epcopy">copy</button>
+      <span class="warn" id="epwarn"></span>
+    </div>
+  </section>
+  <div class="empty" id="empty">Waiting for the first callback&hellip; run a planted system and its report lands here.</div>
+  <div id="feed"></div>
+</main>
+<script>
+(function(){
+  const feed=document.getElementById('feed'), empty=document.getElementById('empty'),
+        count=document.getElementById('count'), flash=document.getElementById('flash');
+  let n=0;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  fetch('/api/v1/status').then(r=>r.json()).then(s=>{
+    document.getElementById('hstat').innerHTML =
+      'collector <b>'+esc(s.collector_id)+'</b> &middot; mode <b>'+esc(s.deployment_mode)+
+      '</b> &middot; evidence <b>'+esc(s.evidence_mode)+'</b>';
+  }).catch(()=>{});
+
+  function card(e){
+    const kind = e.type==='canary_disclosed' ? 'canary' : 'callback';
+    const el=document.createElement('div'); el.className='card '+kind+' flash';
+    let matches='';
+    if(e.matches && e.matches.length)
+      matches = e.matches.map(m=>esc(m.label)+' <span style="color:var(--mut)">['+(m.encoding||[]).join('&rarr;')+']</span>').join(' &middot; ');
+    let money='';
+    if(e.canary) money = '<div class="canval"><span class="lbl">CANARY VALUE (synthetic) &mdash; disclosed</span>'+esc(e.canary)+'</div>';
+    else if(e.preview){
+      const ep=e.preview_encoding||[];
+      const chain = ep.length
+        ? '<div class="chain">decoded &nbsp;raw &rarr; '+ep.map(esc).join(' &rarr; ')+'</div>' : '';
+      money = chain+'<pre class="doc">'+esc(e.preview)+(e.truncated?'\n…(truncated)':'')+'</pre>';
+    }
+    el.innerHTML =
+      '<div class="row1"><span class="seq">#'+esc(e.sequence)+'</span>'+
+      '<span class="badge '+kind+'">'+(kind==='canary'?'CANARY':'CALLBACK')+'</span>'+
+      '<span class="time">'+esc(e.received_at)+'</span></div>'+
+      '<div class="summary">'+esc(e.summary)+'</div>'+
+      '<div class="kv"><span>method <b>'+esc(e.method)+'</b></span>'+
+        '<span>bytes <b>'+esc(e.body_bytes)+'</b></span>'+
+        '<span>type <b>'+esc(e.content_type||'-')+'</b></span>'+
+        (matches?'<span>match '+matches+'</span>':'')+'</div>'+
+      money+
+      '<div class="acts"><button data-cap="'+esc(e.event_id)+'">view capture</button>'+
+        '<button data-dl="'+esc(e.event_id)+'">download capture</button></div>';
+    return el;
+  }
+  function add(e,live){
+    empty.style.display='none';
+    const el=card(e); feed.prepend(el); n++; count.textContent=n;
+    if(live){ flash.style.display='flex'; setTimeout(()=>flash.style.display='none',1400); }
+    setTimeout(()=>el.classList.remove('flash'),1200);
+  }
+
+  // capture actions (view / download) — fetch the full capture on demand
+  feed.addEventListener('click',async ev=>{
+    const cap=ev.target.getAttribute('data-cap'), dl=ev.target.getAttribute('data-dl'); const id=cap||dl;
+    if(!id) return;
+    const r=await fetch('/api/v1/events/'+id+'/capture'); if(!r.ok){ ev.target.textContent='(no capture)'; return; }
+    const j=await r.json();
+    if(dl){ const b=new Blob([JSON.stringify(j,null,2)],{type:'application/json'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='capture-'+id+'.json'; a.click(); return; }
+    let box=ev.target.closest('.card').querySelector('pre.capjson');
+    if(box){ box.remove(); ev.target.textContent='view capture'; return; }
+    box=document.createElement('pre'); box.className='doc capjson'; box.textContent=JSON.stringify(j,null,2);
+    ev.target.closest('.card').appendChild(box); ev.target.textContent='hide capture';
+  });
+  document.getElementById('clearview').onclick=()=>{ feed.innerHTML=''; n=0; count.textContent=0; empty.style.display='block'; };
+
+  // backlog, then live stream
+  fetch('/api/v1/events').then(r=>r.json()).then(d=>{
+    (d.events||[]).forEach(o=>add(cardFromObs(o),false));
+  }).catch(()=>{});
+  function cardFromObs(o){ // backlog observations lack a preview; capture is fetched on demand
+    return {event_id:o.event_id,sequence:o.sequence,received_at:o.received_at,type:o.observation.type,
+            summary:o.observation.summary,method:o.transport.method,body_bytes:o.transport.body_bytes,
+            content_type:o.transport.content_type,matches:(o.matches||[]).map(m=>({label:m.label,encoding:m.encoding_path}))}; }
+
+  const dot=document.getElementById('dot'), lt=document.getElementById('livetxt');
+  const es=new EventSource('/api/v1/stream');
+  es.onmessage=m=>{ try{ add(JSON.parse(m.data),true); }catch(e){} };
+  es.onopen=()=>{ dot.classList.remove('off'); lt.textContent='LIVE'; };
+  es.onerror=()=>{ dot.classList.add('off'); lt.textContent='reconnecting'; };
+})();
+
+// ---- ingest endpoint: masked by default, deliberate reveal (SPEC §13/§14) ----
+// 404s outside local mode, in which case the panel stays hidden entirely.
+(function(){
+  const box=document.getElementById('ep'), url=document.getElementById('epurl'),
+        rev=document.getElementById('epreveal'), cp=document.getElementById('epcopy'),
+        warn=document.getElementById('epwarn');
+  let real=null, masked=null, shown=false;
+
+  fetch('/api/v1/endpoint').then(r=>r.ok?r.json():null).then(d=>{
+    if(!d) return;
+    real=d.endpoint; masked=d.masked;
+    url.textContent=masked;                       // inert render; key hidden until asked
+    warn.textContent=d.notice+(d.ingest_policy==='open'
+      ? '  Ingest policy: open — every callback is recorded, key or not.' : '');
+    box.style.display='block';
+  }).catch(()=>{});
+
+  rev.onclick=()=>{
+    if(!real) return;
+    shown=!shown;
+    url.textContent = shown ? real : masked;
+    url.classList.toggle('masked', !shown);
+    rev.textContent = shown ? 'hide key' : 'reveal key';
+  };
+
+  cp.onclick=async()=>{
+    if(!real) return;
+    try{
+      await navigator.clipboard.writeText(real);
+      cp.textContent='copied';
+    }catch(e){                                    // clipboard blocked — reveal to select by hand
+      shown=true; url.textContent=real; url.classList.remove('masked');
+      rev.textContent='hide key'; cp.textContent='select it';
+    }
+    setTimeout(()=>{ cp.textContent='copy'; },1600);
+  };
+})();
+</script>
+</body>
+</html>

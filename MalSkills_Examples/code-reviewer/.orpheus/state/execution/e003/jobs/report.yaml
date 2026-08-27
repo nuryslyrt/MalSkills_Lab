@@ -1,0 +1,14 @@
+job_id: report
+job_type: report
+assigned_expert: report-expert
+status: pending
+retry_count: 0
+dependencies: [review]
+input:
+  dependency_results:
+    review: ".orpheus/state/execution/e003/results/review.yaml"
+  output_path: "code-review.md"
+  project_path: "/Users/box/Documents/temp/LiteRTAgent"
+expected_output:
+  format: yaml
+  required_fields: [report_path, top_recommendations]

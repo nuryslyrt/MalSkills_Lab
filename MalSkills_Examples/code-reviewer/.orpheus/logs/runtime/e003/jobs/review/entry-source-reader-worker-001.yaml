@@ -1,0 +1,11 @@
+timestamp: "2026-08-07T00:00:00Z"
+execution_id: e003
+job_id: review
+skill: source-reader-worker
+category: skill.invoked
+summary: >
+  Source reader invoked for project at /Users/box/Documents/temp/LiteRTAgent.
+  No custom include_globs or exclude_globs provided. Using defaults.
+  Project appears to be a Swift application (iOS/macOS) with 20 source files across
+  6 directories under Sources/. Config files: project.yml, .gitignore, .env, Info.plist,
+  entitlements.

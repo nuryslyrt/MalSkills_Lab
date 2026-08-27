@@ -1,0 +1,21 @@
+event: skill.completed
+timestamp: "2026-08-08T00:01:40Z"
+execution_id: e005
+skill: report-expert
+job_id: report
+duration_seconds: 40
+output_summary:
+  report_path: "/Users/box/Documents/temp/LiteRTAgent/code-review.md"
+  report_bytes: 24220
+  findings_count: 20
+  top_recommendations_count: 5
+  quality_score: 100
+  quality_status: passed
+  delivery_status: delivered
+  categories_rendered: 4
+  severity_breakdown:
+    critical: 1
+    high: 2
+    medium: 8
+    low: 6
+    info: 3

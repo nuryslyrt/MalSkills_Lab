@@ -1,0 +1,20 @@
+event: evidence_gathered
+timestamp: 2026-08-01T00:10:30.000Z
+expert: doctor
+execution_id: e001
+evidence:
+  - ref: "logs/runtime/e001/orchestrator/entry-003.yaml + entry-005.yaml"
+    finding: "Orchestrator dispatched both review and report jobs. Per its own SKILL.md dispatch template (orchestrator/SKILL.md line 95), the dispatch prompt DOES include log_path: .orpheus/logs/runtime/{eid}/jobs/{job_id}/ . So log_path IS supplied to the experts."
+  - ref: "logs/runtime/e001/jobs/review/decision.log"
+    finding: "A freeform 3-line PLAINTEXT file. Contains one real decision (read files directly vs dispatch source-reader-worker) but not as entry-NNN.yaml and not in question/options_considered/chosen/reasoning/confidence form."
+  - ref: "logs/runtime/e001/jobs/report/ (absent)"
+    finding: "Directory does not exist. report-expert emitted zero log entries despite receiving log_path."
+  - ref: "logs/runtime/e001/decisions.log.yaml"
+    finding: "total_decisions: 0, decisions: []. CONFIRMS impact: the review-expert's plaintext decision.log was NOT picked up by assemble-logs.py, so no expert decision reasoning survives into assembled views."
+  - ref: "experts/review-expert/SKILL.md Logging Protocol (lines 97-109)"
+    finding: "Says 'Write log entries as entry-NNN.yaml files to your log_path directory.' but the instruction is soft: the numbered list frames entries by content type; it never pins the exact filename pattern to the exact log_path, never says the directory must be created, and never forbids plaintext. Ambiguity allowed the expert to improvise a single decision.log."
+  - ref: "experts/report-expert/SKILL.md Logging Protocol (lines 100-111)"
+    finding: "Same soft wording. Nothing forces an entry-001 (skill.invoked) at the START, so with no immediate write obligation the expert produced no directory at all."
+  - ref: "workers/source-reader-worker/SKILL.md Logging Protocol (lines 96-104)"
+    finding: "Not invoked this run (review-expert read files directly), so its logging is not implicated; out of scope for the fix."
+note: "log_path was correctly provided by the orchestrator. Root cause is NOT a missing dispatch field (that would be orchestrator-behavioral but the field is present) — it is the ambiguous Logging Protocol wording in the two expert SKILL.md files."

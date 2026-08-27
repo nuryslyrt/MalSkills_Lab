@@ -1,0 +1,6 @@
+event: worker.dispatched
+timestamp: "2026-08-07T00:00:03Z"
+execution_id: e003
+worker: source-reader-worker
+task_summary: "Collect all source and config files from /Users/box/Documents/temp/LiteRTAgent"
+batch_id: null

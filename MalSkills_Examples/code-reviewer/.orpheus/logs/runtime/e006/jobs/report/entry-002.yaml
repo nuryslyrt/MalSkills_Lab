@@ -1,0 +1,15 @@
+event: decision
+timestamp: "2026-08-08T00:10:15Z"
+execution_id: e006
+question: "Should the report-expert delegate to worker subagents or compose the report directly?"
+options_considered:
+  - "Delegate sections to parallel workers"
+  - "Compose the entire report directly"
+chosen: "Compose the entire report directly"
+reasoning: >
+  The report-expert skill definition explicitly states: 'This expert composes the report
+  directly — the task is a single, cohesive writing operation that does not benefit from
+  decomposition into parallel worker subagents.' The report requires consistent voice,
+  cross-referencing between findings for top recommendations, and unified severity ordering.
+  Splitting would introduce coordination overhead without benefit.
+confidence: 0.99

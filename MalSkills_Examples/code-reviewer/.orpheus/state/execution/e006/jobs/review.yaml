@@ -1,0 +1,17 @@
+job_id: review
+job_type: review
+expert: review-expert
+status: pending
+retry_count: 0
+dependencies: []
+input:
+  project_path: "/Users/box/Documents/temp/LiteRTAgent"
+expected_output:
+  format: yaml
+  required_fields: [findings, structure_overview, files_reviewed]
+user_context:
+  original_request: "run code-reviewer for /Users/box/Documents/temp/LiteRTAgent"
+  constraints: []
+  preferences: []
+  conversation_notes: "User wants a full code review of the LiteRTAgent Swift project"
+  target_scope: "/Users/box/Documents/temp/LiteRTAgent"

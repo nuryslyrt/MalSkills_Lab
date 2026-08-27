@@ -1,0 +1,7 @@
+event: compound.surgeon_dispatch
+execution_id: e001
+operation: modify_contract
+target: report-expert
+user_decision: "Wire it into the report"
+authorization: "User pre-approved via AskUserQuestion — dispatch Surgeon to make report-expert consume review-expert's files_reviewed and render a 'Files Reviewed' section."
+affected_claim: tool_contract_soundness

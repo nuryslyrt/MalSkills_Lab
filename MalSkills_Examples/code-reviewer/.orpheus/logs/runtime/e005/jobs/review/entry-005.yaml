@@ -1,0 +1,17 @@
+event: analysis_complete
+timestamp: "2026-08-08T00:00:10Z"
+execution_id: e005
+findings_count: 20
+by_severity:
+  critical: 1
+  high: 2
+  medium: 8
+  low: 6
+  info: 3
+by_category:
+  bug: 4
+  best-practice: 9
+  readability: 3
+  complexity: 4
+files_analyzed: 21
+message: "Full four-dimension analysis complete across all collected files."

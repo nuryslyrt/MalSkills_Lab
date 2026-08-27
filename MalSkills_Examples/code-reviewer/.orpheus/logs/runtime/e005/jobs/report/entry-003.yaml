@@ -1,0 +1,23 @@
+event: decision
+timestamp: "2026-08-08T00:01:10Z"
+execution_id: e005
+question: "How should findings be organized and what are the top recommendations?"
+options_considered:
+  - "Group by file path, then severity within each file"
+  - "Group by category (best-practice, bug, complexity, readability), ordered by severity within each"
+chosen: "Group by category, ordered by severity within each"
+reasoning: >
+  The skill definition specifies grouping by category first, then ordering by severity
+  (critical -> high -> medium -> low -> info) within each category. This is mandatory per
+  the execution protocol. Top recommendations are derived from: (1) the single critical
+  finding (leaked AWS secret), (2) the recurring pattern of API keys in unencrypted
+  UserDefaults (high + medium, spans 2 files), (3) the high-severity URL scheme validation
+  gap, (4) the medium-severity date parsing bug that would break core tool functionality,
+  and (5) the missing streaming cancellation UX.
+confidence: 0.95
+findings_by_category:
+  best-practice: 8
+  bug: 4
+  complexity: 3
+  readability: 5
+total_findings: 20

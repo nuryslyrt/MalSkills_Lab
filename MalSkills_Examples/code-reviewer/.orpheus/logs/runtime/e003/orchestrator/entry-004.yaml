@@ -1,0 +1,12 @@
+event: result_received
+timestamp: "2026-08-07T00:12:07Z"
+execution_id: e003
+category: result
+batch_id: 1
+job_id: review
+expert: review-expert
+status: completed
+findings_count: 25
+files_reviewed: 20
+duration_ms: 727017
+notes: "Review-expert completed successfully. 25 findings across 20 Swift files. Proceeding to Batch 2 (report)."

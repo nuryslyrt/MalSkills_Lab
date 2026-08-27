@@ -1,0 +1,9 @@
+event: dispatch
+timestamp: "2026-08-07T00:12:08Z"
+execution_id: e003
+category: dispatch
+batch_id: 2
+job_id: report
+expert: report-expert
+dispatch_type: subagent
+notes: "Review results validated (25 findings, 20 files). Dispatching report-expert to render code-review.md."

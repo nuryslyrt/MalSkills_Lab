@@ -1,0 +1,20 @@
+job_id: report
+job_type: report
+expert: report-expert
+status: pending
+retry_count: 0
+dependencies: [review]
+input:
+  project_path: "/Users/box/Documents/temp/LiteRTAgent"
+  output_path: "/Users/box/Documents/temp/LiteRTAgent/code-review.md"
+dependency_results:
+  review: ".orpheus/state/execution/e006/results/review.yaml"
+expected_output:
+  format: yaml
+  required_fields: [report_path, top_recommendations]
+user_context:
+  original_request: "run code-reviewer for /Users/box/Documents/temp/LiteRTAgent"
+  constraints: []
+  preferences: []
+  conversation_notes: "User wants a full code review of the LiteRTAgent Swift project"
+  target_scope: "/Users/box/Documents/temp/LiteRTAgent"

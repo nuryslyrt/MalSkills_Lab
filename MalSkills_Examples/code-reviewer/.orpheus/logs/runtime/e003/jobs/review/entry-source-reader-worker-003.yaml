@@ -1,0 +1,21 @@
+timestamp: "2026-08-07T00:00:02Z"
+execution_id: e003
+job_id: review
+skill: source-reader-worker
+category: skill.completed
+summary: >
+  Source reading completed successfully. Collected 20 Swift source files (2153 lines total)
+  and 6 config/metadata files from /Users/box/Documents/temp/LiteRTAgent.
+  Result written to review-source-reader-worker.yaml.
+output_summary:
+  source_files: 20
+  config_files: 6
+  total_swift_lines: 2153
+  truncations: 0
+  modules:
+    - "App (1 file, 137 lines) - entry point + AppState"
+    - "Engine (1 file, 108 lines) - LiteRT-LM SDK wrapper"
+    - "Models (2 files, 321 lines) - model catalog + download manager"
+    - "Actions (6 files, 755 lines) - tool definitions, execution, web services"
+    - "Chat (3 files, 223 lines) - chat data models, view model, persistence"
+    - "UI (7 files, 609 lines) - SwiftUI views"

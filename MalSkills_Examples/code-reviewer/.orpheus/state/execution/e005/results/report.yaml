@@ -1,0 +1,31 @@
+job_id: report
+status: completed
+expert: report-expert
+execution_id: e005
+timestamp: "2026-08-08T00:01:40Z"
+
+report_path: "/Users/box/Documents/temp/LiteRTAgent/code-review.md"
+
+top_recommendations:
+  - "Rotate the leaked AWS secret key and add .env to .gitignore immediately."
+  - "Move all API keys and tokens to the iOS Keychain (HuggingFace, Tavily, Serper, Jina)."
+  - "Add a URL scheme allowlist to ActionExecutor.openScheme to block arbitrary scheme opens."
+  - "Fix the ISO-8601 date parser to accept timezone-less strings that on-device models produce."
+  - "Add streaming cancellation to ChatViewModel with a stop button in the UI."
+
+findings_count: 20
+
+quality_gate:
+  adapter_status: passed
+  score: 100
+  minimum_score: 85
+  all_checks_passed: true
+  delivery_status: delivered
+  report_sha256: "6b6b55490ba1b0aa20f9836ca67d453f185fc057ee933a1da99eafe34276109e"
+
+confidence: 0.95
+quality_assessment: >
+  Report includes all 20 findings organized by 4 categories, ordered by severity within
+  each. Every finding includes file location and suggested fix. Top recommendations are
+  derived from highest-severity and recurring patterns. Files reviewed section lists all
+  25 assessed files. Quality adapter returned score 100/100 with all checks passed.

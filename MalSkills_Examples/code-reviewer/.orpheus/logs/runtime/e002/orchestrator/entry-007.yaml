@@ -1,0 +1,8 @@
+event: phase4.log_assembly_failed
+execution_id: e002
+error_chain:
+  symptom: "assemble-logs.py exited with TypeError"
+  location: "scripts/assemble-logs.py:96 sort_by_timestamp -> get_ts"
+  root_cause: "Fallback datetime.min is offset-naive; parsed expert timestamps are offset-aware (Z->+00:00). Python cannot compare naive vs aware datetimes."
+  masked_until_now: "e001 experts logged no sortable structured entries, so all sort keys were naive; the mix only appears now that logging is fixed."
+recommended_route: "Doctor — configuration/script defect in assemble-logs.py get_ts fallback."

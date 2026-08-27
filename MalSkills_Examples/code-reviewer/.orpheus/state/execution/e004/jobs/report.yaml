@@ -1,0 +1,11 @@
+job_id: report
+job_type: report
+expert: report-expert
+status: pending
+retry_count: 0
+depends_on:
+  - review
+input:
+  review_results_path: ".orpheus/state/execution/e004/results/review.yaml"
+  output_path: "code-review.md"
+output_path: ".orpheus/state/execution/e004/results/report.yaml"

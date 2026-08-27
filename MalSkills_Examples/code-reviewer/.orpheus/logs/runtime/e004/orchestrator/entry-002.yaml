@@ -1,0 +1,10 @@
+timestamp: "2026-08-07T00:00:01Z"
+event: dispatch.batch_1
+execution_id: e004
+actor: orchestrator
+action: dispatch_review_expert
+decision: "Dispatched review-expert as subagent for Batch 1 (review job). No dependencies. Batch 2 (report) will follow after review completes."
+routing:
+  signal_words: ["run", "code-reviewer"]
+  route: runner
+  reasoning: "User intent is to execute an existing system against a target directory."

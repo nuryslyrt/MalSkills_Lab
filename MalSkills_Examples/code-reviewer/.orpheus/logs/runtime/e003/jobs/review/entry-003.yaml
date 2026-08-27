@@ -1,0 +1,13 @@
+event: decision
+timestamp: "2026-08-07T00:00:02Z"
+execution_id: e003
+category: worker_selection
+question: "Which workers should be dispatched for file collection?"
+options_considered:
+  - "source-reader-worker — designed for exactly this task"
+  - "No worker — read files directly with Read/Glob"
+chosen: "source-reader-worker"
+reasoning: >
+  source-reader-worker is the only available worker and is purpose-built for enumerating
+  and reading project files with structure overview. It is the right tool for the collect stage.
+confidence: 0.98

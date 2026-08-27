@@ -1,0 +1,6 @@
+event: worker.dispatch
+timestamp: 2026-08-01T00:05:30Z
+execution_id: e002
+job_id: review
+dispatched: false
+reasoning: "Per entry-003 decision, no source-reader-worker was dispatched. Collection performed directly by the review-expert. Logged here for protocol completeness."

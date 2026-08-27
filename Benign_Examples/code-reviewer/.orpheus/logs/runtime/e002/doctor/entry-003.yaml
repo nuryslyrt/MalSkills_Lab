@@ -1,0 +1,24 @@
+event: evidence_gathered
+timestamp: 2026-08-01T00:02:00Z
+execution_id: e002
+skill: orpheus-doctor
+category: diagnosis
+level: info
+reproduction:
+  command: "python3 .orpheus/scripts/assemble-logs.py e002 --base-path .orpheus"
+  exit_code: 1
+  traceback: |
+    Traceback (most recent call last):
+      File ".orpheus/scripts/assemble-logs.py", line 206, in <module>
+        main()
+      File ".orpheus/scripts/assemble-logs.py", line 201, in main
+        result = assemble(execution_id, base_path)
+      File ".orpheus/scripts/assemble-logs.py", line 113, in assemble
+        sorted_entries = sort_by_timestamp(all_entries)
+      File ".orpheus/scripts/assemble-logs.py", line 96, in sort_by_timestamp
+        return sorted(entries, key=get_ts)
+    TypeError: can't compare offset-naive and offset-aware datetimes
+log_entry_analysis:
+  orchestrator_entries: "8 files under orchestrator/. NONE contain a 'timestamp' field (e.g. entry-001.yaml has only event/execution_id/request/routing_decision). get_ts() falls through to the naive fallback datetime.min."
+  job_entries: "review/ and report/ job entries DO contain 'timestamp: 2026-08-01T00:00:00Z' which fromisoformat parses (after Z->+00:00) into OFFSET-AWARE datetimes."
+  root_of_crash: "sorted() compares a naive datetime.min (orchestrator) against offset-aware datetimes (jobs) -> TypeError at line 96 in get_ts sort key."

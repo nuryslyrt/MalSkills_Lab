@@ -1,0 +1,77 @@
+build_id: "b001"
+system: "code-reviewer"
+timestamp: "2026-08-01T00:00:00Z"
+
+schema_validation:
+  tool: ".orpheus/scripts/validate-yaml.py"
+  note: >
+    PyYAML not installed in the build environment, so the validator used its
+    line-by-line fallback parser. This flattens nested mappings, producing benign
+    "Unknown field" warnings for nested keys. All required top-level fields validated
+    and every file returned valid:true with zero errors.
+  results:
+    - file: registry.yaml
+      schema: registry
+      valid: true
+      errors: 0
+    - file: system.yaml
+      schema: system
+      valid: true
+      errors: 0
+    - file: orchestrator/contract.yaml
+      schema: contract
+      valid: true
+      errors: 0
+    - file: experts/review-expert/contract.yaml
+      schema: contract
+      valid: true
+      errors: 0
+    - file: experts/report-expert/contract.yaml
+      schema: contract
+      valid: true
+      errors: 0
+    - file: workers/source-reader-worker/contract.yaml
+      schema: contract
+      valid: true
+      errors: 0
+
+path_existence:
+  all_registry_paths_exist: true
+  checked:
+    - orchestrator/SKILL.md
+    - orchestrator/contract.yaml
+    - experts/review-expert/SKILL.md
+    - experts/review-expert/contract.yaml
+    - experts/report-expert/SKILL.md
+    - experts/report-expert/contract.yaml
+    - workers/source-reader-worker/SKILL.md
+    - workers/source-reader-worker/contract.yaml
+
+dag_validation:
+  nodes: [review, report]
+  edges:
+    - from: report
+      to: review
+      relation: depends_on
+  cycles_detected: false
+  dangling_refs: false
+  orphaned_jobs: false
+  every_expert_has_routing_rule: true
+  result: pass
+
+contract_compatibility:
+  chains:
+    - producer: review-expert
+      consumer: report-expert
+      required_inputs_satisfied: true
+      type_mismatches: 0
+      note: "findings(array) and structure_overview(string) present in producer output; summary(optional) also satisfied."
+    - producer: source-reader-worker
+      consumer: review-expert
+      required_inputs_satisfied: true
+      type_mismatches: 0
+      note: "Internal delegation: files(array) + structure_overview(string) consumed by review-expert."
+  result: pass
+
+fix_cycles_used: 0
+overall: pass

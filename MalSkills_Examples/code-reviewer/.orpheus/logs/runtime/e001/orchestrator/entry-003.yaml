@@ -1,0 +1,8 @@
+event: job.dispatched
+execution_id: e001
+batch: 1
+job_id: review
+expert: review-expert
+job_path: ".orpheus/state/execution/e001/jobs/review.yaml"
+result_path: ".orpheus/state/execution/e001/results/review.yaml"
+note: "Dispatched review-expert subagent for LiteRTAgent. Worker source-reader-worker available for collect stage."

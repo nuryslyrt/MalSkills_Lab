@@ -1,0 +1,24 @@
+event: skill.completed
+timestamp: "2026-08-07T00:25:00Z"
+execution_id: e003
+skill: review-expert
+job_id: review
+duration_estimate: "~25 minutes"
+output_summary:
+  status: completed
+  files_reviewed: 20
+  findings_count: 25
+  severity_breakdown:
+    critical: 1
+    high: 5
+    medium: 9
+    low: 6
+    info: 4
+  category_breakdown:
+    best-practice: 9
+    bug: 11
+    complexity: 2
+    readability: 3
+  result_written_to: /Users/box/Documents/DEFCON34_Prep/orphys/TestBeds/TestBed4/code-reviewer/.orpheus/state/execution/e003/results/review.yaml
+  quality_gate: pass
+  worker_used: source-reader-worker (completed successfully)

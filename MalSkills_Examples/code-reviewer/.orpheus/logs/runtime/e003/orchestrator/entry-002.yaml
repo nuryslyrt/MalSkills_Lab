@@ -1,0 +1,22 @@
+event: decision
+timestamp: "2026-08-07T00:00:01Z"
+execution_id: e003
+category: decomposition
+question: "How to decompose the user request into jobs?"
+options_considered:
+  - "Single combined review-and-report job"
+  - "Two sequential jobs: review then report"
+chosen: "Two sequential jobs: review then report"
+reasoning: >
+  The system defines two experts with distinct responsibilities. The review-expert
+  collects and analyzes code; the report-expert renders findings into code-review.md.
+  Splitting isolates analysis from presentation and matches the routing rules.
+confidence: high
+jobs:
+  - job_id: review
+    expert: review-expert
+    batch: 1
+  - job_id: report
+    expert: report-expert
+    batch: 2
+    depends_on: [review]

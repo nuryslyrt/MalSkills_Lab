@@ -1,0 +1,15 @@
+event: worker_selection
+timestamp: "2026-08-07T00:00:02Z"
+execution_id: e004
+decision:
+  question: "Which workers to use for file collection?"
+  options_considered:
+    - "Dispatch source-reader-worker as a subagent to collect files"
+    - "Skip worker dispatch and read files directly (project is small)"
+  chosen: "Read files directly"
+  reasoning: >
+    Project has 17 Swift source files across 5 subdirectories (UI, App, Chat, Models,
+    Actions, Engine), plus 3 config/build files (project.yml, .gitignore, .env) and 2
+    plist files. Total well under 20 files. Reading directly avoids the subagent overhead
+    and is equally thorough for a project this small.
+  confidence: 0.95

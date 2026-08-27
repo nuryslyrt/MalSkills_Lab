@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# proofctl: Proof Collector control CLI. SPEC 16.
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+cd "$HERE"
+export CONFIG_DIR="${CONFIG_DIR:-$HERE/.pcrun}"
+export STATE_DIR="${STATE_DIR:-$CONFIG_DIR/state}"
+export PORT="${PORT:-8888}"
+PIDFILE="$CONFIG_DIR/server.pid"
+LOG="$CONFIG_DIR/server.log"
+
+cmd="${1:-help}"; shift || true
+
+case "$cmd" in
+  init)
+    python3 -m app.init "$@" ;;
+
+  up)
+    if [ ! -f "$CONFIG_DIR/ingest_key" ]; then
+      echo "[proofctl] no runtime material. Run: ./proofctl init" >&2; exit 1
+    fi
+    mkdir -p "$STATE_DIR"
+    # loopback host-publication assertion is inherent: server binds 127.0.0.1 in local mode.
+    nohup python3 -m app.server > "$LOG" 2>&1 &
+    echo $! > "$PIDFILE"
+    for _ in $(seq 1 40); do
+      if curl -sf "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
+        echo "[proofctl] up (pid $(cat "$PIDFILE"))"
+        echo "  dashboard : http://127.0.0.1:$PORT/dashboard   <- watch callbacks land here"
+        echo "  status    : http://127.0.0.1:$PORT/api/v1/status"
+        echo "  events    : http://127.0.0.1:$PORT/api/v1/events"
+        exit 0
+      fi
+      sleep 0.2
+    done
+    echo "[proofctl] FAILED to become ready. Log:" >&2; tail -n 20 "$LOG" >&2; exit 1 ;;
+
+  self-test)
+    python3 -m app.selftest ;;
+
+  simulate)
+    python3 -m app.simulator ;;
+
+  endpoint)
+    # Deliberate local reveal of the keyed ingest URL for wiring into a bait / victim config.
+    # Loopback only. Do NOT paste onto slides, into logs, or into a shared repo.
+    key="$(cat "$CONFIG_DIR/ingest_key")"
+    echo "http://127.0.0.1:$PORT/ingest/$key/notify"
+    echo "  ^ deliberate local reveal (loopback only). Rotate after a public demo." >&2 ;;
+
+  dashboard)
+    # Live view: event feed, ingest endpoint panel (key masked until revealed), capture viewer.
+    url="http://127.0.0.1:$PORT/dashboard"
+    if ! curl -sf "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
+      echo "[proofctl] collector is not running. Start it with: ./proofctl up" >&2; exit 1
+    fi
+    echo "$url"
+    # Best effort: open in the default browser where a opener exists. Never fatal.
+    if command -v open >/dev/null 2>&1; then open "$url" >/dev/null 2>&1 || true
+    elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$url" >/dev/null 2>&1 || true
+    fi ;;
+
+  status)
+    curl -s "http://127.0.0.1:$PORT/api/v1/status" && echo ;;
+
+  events)
+    curl -s "http://127.0.0.1:$PORT/api/v1/events" && echo ;;
+
+  clear)
+    tok="$(cat "$CONFIG_DIR/admin-token")"
+    curl -s -X POST "http://127.0.0.1:$PORT/api/v1/admin/clear" \
+      -H "Authorization: Bearer $tok" && echo ;;
+
+  down)
+    if [ -f "$PIDFILE" ]; then kill "$(cat "$PIDFILE")" 2>/dev/null || true; rm -f "$PIDFILE"; fi
+    echo "[proofctl] down" ;;
+
+  *)
+    echo "usage: ./proofctl {init|up|dashboard|endpoint|status|events|self-test|simulate|clear|down}"
+    echo
+    echo "  init       generate runtime material (ingest key, admin token, canaries)"
+    echo "  up         start the collector on 127.0.0.1:\$PORT (default 8888)"
+    echo "  dashboard  print and open the live dashboard URL"
+    echo "  endpoint   print the keyed ingest URL to wire into a planted system"
+    echo "  status     collector id, mode, evidence mode, scenario"
+    echo "  events     all recorded events as JSON"
+    echo "  self-test  send a synthetic canary and verify the pipeline end to end"
+    echo "  simulate   replay the configured scenario against the collector"
+    echo "  clear      wipe all recorded events"
+    echo "  down       stop the collector" ;;
+esac

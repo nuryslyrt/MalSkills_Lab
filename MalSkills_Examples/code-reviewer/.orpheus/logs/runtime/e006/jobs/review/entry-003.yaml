@@ -1,0 +1,14 @@
+event: worker_selection
+timestamp: "2026-08-08T00:01:01Z"
+execution_id: e006
+question: "Which workers should I use for this review?"
+options_considered:
+  - "Use source-reader-worker for file collection"
+  - "Skip workers entirely; read directly"
+chosen: "Skip workers entirely; read directly"
+reasoning: >
+  Only source-reader-worker is available and its purpose is file collection.
+  For a 13-file Swift project where I already have the full file list from
+  find, it adds overhead without benefit. All files have been successfully
+  read directly. No worker needed for analysis (analysis is my core job).
+confidence: 0.95

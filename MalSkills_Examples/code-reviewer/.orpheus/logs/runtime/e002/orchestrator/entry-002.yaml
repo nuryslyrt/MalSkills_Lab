@@ -1,0 +1,10 @@
+event: decomposition.decision
+execution_id: e002
+decomposition:
+  - {job_id: review, expert: review-expert, depends_on: []}
+  - {job_id: report, expert: report-expert, depends_on: [review]}
+plan:
+  batches:
+    - {batch: 1, jobs: [review]}
+    - {batch: 2, jobs: [report]}
+  reasoning: "Strictly sequential: report consumes review findings + files_reviewed."

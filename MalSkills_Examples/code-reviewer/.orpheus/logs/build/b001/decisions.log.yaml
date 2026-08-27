@@ -1,0 +1,58 @@
+build_id: "b001"
+system: "code-reviewer"
+
+decisions:
+  - id: 1
+    category: decision
+    question: "How many orchestration jobs should the pipeline have?"
+    options_considered:
+      - "Three jobs (collect, review, report) — one per stage."
+      - "Two jobs (review, report) with collect handled by a worker inside review-expert."
+    chosen: "Two jobs (review, report)."
+    reasoning: >
+      Workers are leaf nodes dispatched by experts, not jobs the orchestrator assigns
+      directly. Making collect its own orchestrator job would require a dedicated
+      collect-expert that only wraps the worker — over-decomposition. The brief calls
+      for a source-reader worker + review expert + report-writer expert, so collect is
+      the worker's job, delegated by the review-expert.
+    confidence: high
+
+  - id: 2
+    category: decision
+    question: "Should collection be a worker or folded into the review-expert directly?"
+    options_considered:
+      - "A reusable source-reader-worker the review-expert dispatches."
+      - "The review-expert reads files itself with Glob/Read."
+    chosen: "source-reader-worker (with direct-read fallback on failure)."
+    reasoning: >
+      File enumeration and reading is an atomic, reusable operation distinct from
+      quality analysis. Isolating it keeps the review-expert focused on judgment and
+      matches the requested topology. The expert retains a direct-read fallback so a
+      worker failure does not block the pipeline.
+    confidence: high
+
+  - id: 3
+    category: decision
+    question: "Should report writing get its own workers?"
+    options_considered:
+      - "Add a markdown-formatter worker."
+      - "No workers — report-expert composes code-review.md directly."
+    chosen: "No workers for report-expert."
+    reasoning: >
+      Rendering findings into one code-review.md is a single cohesive writing task with
+      no parallelizable or reusable sub-operations. Adding a worker would be
+      over-decomposition and waste a subagent spawn.
+    confidence: high
+
+  - id: 4
+    category: decision
+    question: "What concurrency strategy and orchestrator max_parallel?"
+    options_considered:
+      - "adaptive with max_parallel 2."
+      - "sequential."
+    chosen: "adaptive, max_parallel 2."
+    reasoning: >
+      The pipeline is strictly sequential (report depends on review), but adaptive is
+      the ORPHEUS default and leaves room for future parallel expansion; each batch here
+      holds a single job so effective execution is sequential regardless.
+    confidence: high

@@ -1,0 +1,7 @@
+event: compound.completed
+execution_id: e002
+audit: a002
+health_score: 1.0
+status: healthy
+result: "All 7 claims pass, 0 exceptions. a001 warnings + advisory all remediated. 4 renewal triggers active (this session's fixes), re-validated by a002."
+evidence_package: ".orpheus/logs/build/a002/evidence-package.yaml"

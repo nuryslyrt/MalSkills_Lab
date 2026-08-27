@@ -1,0 +1,5 @@
+event: compound.routing
+execution_id: e002
+route: Doctor
+reasoning: "Phase 4 log assembly failed with a deterministic TypeError in assemble-logs.py. Configuration/script defect -> Doctor. User approved dispatch."
+target_artifact: ".orpheus/scripts/assemble-logs.py"

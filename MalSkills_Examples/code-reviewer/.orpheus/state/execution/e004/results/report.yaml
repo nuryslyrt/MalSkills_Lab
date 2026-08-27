@@ -1,0 +1,35 @@
+job_id: report
+status: completed
+skill_name: report-expert
+execution_id: e004
+timestamp: "2026-08-07T00:01:50Z"
+
+output:
+  report_path: "code-review.md"
+  top_recommendations:
+    - "Rotate and protect the AWS secret key immediately. Add .env to .gitignore, rotate the key, and migrate to Keychain or a secrets manager."
+    - "Serialize concurrent tool-call approvals in ActionRuntime. Convert to an actor or guard with an AsyncSemaphore to prevent deadlock."
+    - "Cancel streaming tasks when the consumer is cancelled. Store the Task and use continuation.onTermination to cancel it."
+    - "Fix the ChatViewModel ownership pattern. Switch ChatView from @StateObject to @ObservedObject for externally-created view models."
+    - "Eliminate force-unwraps across the codebase. Use safe unwrapping with fallbacks in ContentView, ModelManager, and ActionExecutor."
+    - "Surface persistence errors instead of swallowing them. Replace try? with do/catch and log or surface failures."
+    - "Enable Swift strict concurrency checking. Update to Swift 6.0 with SWIFT_STRICT_CONCURRENCY: complete."
+  findings_count: 27
+
+quality_gate:
+  adapter: ".orpheus/adapters/report_quality.py"
+  status: passed
+  score: 100
+  minimum_score: 85
+  delivery_status: delivered
+  report_sha256: "eb89ecd5f692c8f1495862a7cba040bfcc51455e449c2719338f8006fd278ac3"
+
+confidence: 0.95
+quality_self_assessment: "high"
+notes: |
+  All 27 findings from the review-expert were included in the report. Findings are grouped
+  by category (bug, best-practice, readability) and ordered by severity within each group.
+  Every finding includes a file location and suggested fix. The report includes Overview,
+  Files Reviewed (25 files), Summary, Top Recommendations (7 items), and Findings by
+  Category sections. The quality adapter returned score 100/100 with all checks passed and
+  delivery confirmed.

@@ -1,0 +1,10 @@
+event: skill.completed
+timestamp: 2026-08-01T00:05:00Z
+execution_id: e002
+job_id: report
+skill_name: report-expert
+status: completed
+report_path: /Users/box/Documents/temp/LiteRTAgent/code-review.md
+findings_count: 27
+files_reviewed_section_rendered: true
+result_path: /Users/box/Documents/DEFCON34_Prep/orphys/OrpheusLibrary/code-reviewer/.orpheus/state/execution/e002/results/report.yaml

@@ -1,0 +1,16 @@
+event: decision
+timestamp: "2026-08-07T00:01:10Z"
+execution_id: e004
+question: "How should findings be grouped, ordered, and presented in the report?"
+options_considered:
+  - "Group by severity first, then by category within each severity level"
+  - "Group by category first (bug, best-practice, readability), then order by severity within each category"
+  - "Group by file/module, then by severity"
+chosen: "Group by category first, then order by severity within each category"
+reasoning: |
+  The skill definition explicitly requires grouping by category (bug, best-practice,
+  readability) with severity ordering (critical -> high -> medium -> low -> info) within
+  each group. This matches the contract and provides a natural reading flow: readers can
+  jump to the category they care about most. Top recommendations will surface the
+  highest-impact items regardless of category.
+confidence: 0.95

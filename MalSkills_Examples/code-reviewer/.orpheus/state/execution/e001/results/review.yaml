@@ -1,0 +1,294 @@
+job_id: review
+status: success
+skill_name: review-expert
+output:
+  structure_overview: |
+    LiteRTAgent is a SwiftUI iOS app (deployment target iOS 17) that runs an
+    on-device LLM agent via Google's LiteRT-LM Swift SDK. The Xcode project is
+    generated from project.yml (XcodeGen), pinning the LiteRT-LM package to a
+    specific commit. ~2150 lines of Swift across 20 files, organized by feature:
+
+      Sources/App/        LiteRTAgentApp.swift  - @main App + AppState (engine
+                          load/backend-fallback/configure orchestration).
+      Sources/Engine/     LiteRTEngine.swift    - the sole SDK boundary; an actor
+                          wrapping Engine/Conversation + streaming generation.
+      Sources/Models/     ModelCatalog.swift    - ModelSpec catalog + AgentSettings
+                          (UserDefaults-persisted test-bench config).
+                          ModelManager.swift    - HF model discovery/download/cache
+                          via a delegate-based FileDownloader.
+      Sources/Chat/       ChatModels.swift      - ChatMessage/ChatSession value types.
+                          ChatStore.swift       - JSON-per-session persistence.
+                          ChatViewModel.swift   - streams tokens into the transcript,
+                          bridges ActionRuntime history into action bubbles.
+      Sources/Actions/    DeviceAction.swift    - enum of permitted device actions.
+                          ActionTools.swift     - one LiteRT `Tool` per action.
+                          ActionRuntime.swift   - confirmation gate + action log
+                          (shared singleton bridging SDK tool calls to executor).
+                          ActionExecutor.swift  - executes actions via UIKit/EventKit/
+                          MapKit/MessageUI (sandbox-safe compose sheets & permissions).
+                          WebServices.swift     - web search (Tavily/Serper/DDG chain)
+                          + page fetch (Jina Reader).
+                          SkillCatalog.swift    - skill metadata (UI + enabled-set).
+      Sources/UI/         ContentView/ChatView/ConfigView/ModelsView/SettingsView/
+                          HistoryView/SkillsView - SwiftUI screens.
+
+    Architecture is clean and well-commented, with a deliberate SDK-isolation
+    boundary (Engine) and value-type models. Main risks concentrate in the
+    concurrency/index handling of streaming, the download validation ordering,
+    and unencoded/force-unwrapped URL construction.
+  files_reviewed:
+    - Sources/App/LiteRTAgentApp.swift
+    - Sources/Engine/LiteRTEngine.swift
+    - Sources/Models/ModelCatalog.swift
+    - Sources/Models/ModelManager.swift
+    - Sources/Chat/ChatModels.swift
+    - Sources/Chat/ChatStore.swift
+    - Sources/Chat/ChatViewModel.swift
+    - Sources/Actions/DeviceAction.swift
+    - Sources/Actions/ActionTools.swift
+    - Sources/Actions/ActionRuntime.swift
+    - Sources/Actions/ActionExecutor.swift
+    - Sources/Actions/WebServices.swift
+    - Sources/Actions/SkillCatalog.swift
+    - Sources/UI/ContentView.swift
+    - Sources/UI/ChatView.swift
+    - Sources/UI/ConfigView.swift
+    - Sources/UI/ModelsView.swift
+    - Sources/UI/SettingsView.swift
+    - Sources/UI/HistoryView.swift
+    - Sources/UI/SkillsView.swift
+    - project.yml
+  findings:
+    - file: Sources/Chat/ChatViewModel.swift
+      line: 55
+      category: bug
+      severity: high
+      description: >
+        `assistantIndex` is captured as `messages.count` before streaming, but the
+        `ActionRuntime.$history` sink (lines 33-46) can append `.action` bubbles to
+        `messages` while a tool is auto-invoked mid-stream. Once an action bubble is
+        inserted, `assistantIndex` no longer points at the assistant message, so
+        subsequent streamed chunks are appended to the wrong row (the action bubble),
+        corrupting the transcript. The `indices.contains` guard prevents a crash but
+        not the misplacement.
+      suggested_fix: >
+        Track the assistant message by its stable `id` rather than by index. Capture
+        `let assistantID = messages[assistantIndex].id`, then inside the loop do
+        `if let i = messages.firstIndex(where: { $0.id == assistantID }) { messages[i].text += chunk }`.
+    - file: Sources/Models/ModelManager.swift
+      line: 145
+      category: bug
+      severity: high
+      description: >
+        HTTP status is validated only AFTER the full file download completes
+        (`downloader.lastResponse` checked at line 145, after `downloader.download`
+        returns). For a gated repo returning 401/403 with an HTML/JSON error body,
+        the body is still downloaded to a temp file; if `lastResponse` is a 200 from
+        a redirect page or the check is reached, an invalid non-model file could be
+        moved to `dest` and later fail cryptically at engine load. Also there is no
+        Content-Type / size sanity check.
+      suggested_fix: >
+        Validate the response status inside the delegate's `didFinishDownloadingTo`
+        (or before moving the temp file) and throw on non-2xx BEFORE
+        `fm.moveItem(at: tempURL, to: dest)`. Optionally assert a minimum expected
+        byte size / reject `text/html` content types for the `.litertlm` download.
+    - file: Sources/Models/ModelManager.swift
+      line: 190
+      category: bug
+      severity: medium
+      description: >
+        Double file move. `FileDownloader.urlSession(_:didFinishDownloadingTo:)`
+        moves the system temp file to its own UUID temp path (line 197), then
+        `downloadFile` moves that again to `dest` (line 148). If the app is
+        backgrounded/terminated between the two moves the partially-relocated file
+        leaks in tmp with no cleanup, and errors thrown from the delegate move are
+        surfaced only via the completion path, making failures hard to attribute.
+      suggested_fix: >
+        Collapse to a single move: have the caller pass the final `dest` into the
+        downloader, or move directly from the delegate's `location` to `dest` inside
+        `didFinishDownloadingTo`. If the two-stage move must stay, clean up the
+        intermediate tmp file in a `defer`/failure path.
+    - file: Sources/Actions/WebServices.swift
+      line: 137
+      category: bug
+      severity: high
+      description: >
+        The fetched URL is interpolated into the Jina Reader endpoint without
+        percent-encoding: `URL(string: "https://r.jina.ai/\(normalized)")`. Any URL
+        containing spaces, query strings with reserved characters, or unicode will
+        produce a nil URL (falling into the "Invalid URL" branch) or a malformed
+        request. Additionally `target` is constructed (line 136) and immediately
+        discarded (`_ = target`, line 140), which is dead code and misleading.
+      suggested_fix: >
+        Build the reader URL with URLComponents or percent-encode the target path
+        segment (e.g. append `normalized` via `URLComponents` path/query, or
+        `addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)`), and remove
+        the unused `target`/`_ = target` lines.
+    - file: Sources/Actions/ActionRuntime.swift
+      line: 20
+      category: bug
+      severity: medium
+      description: >
+        `confirmBeforeActing` is a plain mutable `var` on a non-isolated
+        `ObservableObject`, written from the main thread (AppState.configure) but read
+        via `MainActor.run` in `shouldConfirm()` (line 50). Because the property
+        itself is not actor-isolated, concurrent reads/writes are a potential data
+        race under Swift 6 strict concurrency, and the `MainActor.run` hop only
+        happens to hide it. The comment even notes it is "set on load/apply (main
+        thread)" — an unenforced invariant.
+      suggested_fix: >
+        Isolate the state properly: mark `ActionRuntime` `@MainActor` (it is already
+        UI-facing), or make `confirmBeforeActing` `@Published`/`@MainActor` so both
+        reads and writes are on the main actor and the compiler enforces it.
+    - file: Sources/Models/ModelManager.swift
+      line: 66
+      category: best-practice
+      severity: medium
+      description: >
+        `URL(string:)!` is force-unwrapped on a string built from an
+        externally-derived `filename` (resolved from the HF API) and `spec.hfRepo`.
+        A filename containing a space or reserved character yields nil and crashes
+        the app. The same force-unwrap pattern appears at ModelManager.swift:95,
+        ActionExecutor.swift:145/154, and WebServices.swift:59/84 with attacker/
+        network-controlled or user-controlled inputs.
+      suggested_fix: >
+        Percent-encode dynamic path/query components and use `guard let url =
+        URL(string: ...) else { throw/return failure }` instead of `!`. Prefer
+        URLComponents for endpoints that interpolate user/network data.
+    - file: Sources/Actions/ActionExecutor.swift
+      line: 140
+      category: bug
+      severity: medium
+      description: >
+        `openMapsSearch` returns `.launched(...)` synchronously but the actual
+        MKLocalSearch completion runs asynchronously and can open Maps or a fallback
+        URL later. The returned Result therefore does not reflect real success/failure,
+        and the completion closure (line 140) captures no error handling for the
+        `UIApplication.shared.open(...!)` force-unwrap fallback. On the failure path a
+        malformed query could crash via the `!`.
+      suggested_fix: >
+        Make `openMapsSearch` async and await the MKLocalSearch result so the Result
+        reflects the real outcome, and guard-let the fallback URL rather than
+        force-unwrapping. At minimum, percent-encode is already applied — replace the
+        `!` with a safe guard.
+    - file: Sources/App/LiteRTAgentApp.swift
+      line: 40
+      category: complexity
+      severity: low
+      description: >
+        `loadAgent` mixes several concerns: simulator/backend selection via #if,
+        the fallback loop, engine construction, conversation configuration, and
+        user-facing note/state assembly. At ~50 lines with nested platform
+        conditionals it is the app's highest-cognitive-load function and is hard to
+        unit test.
+      suggested_fix: >
+        Extract backend selection (`backends`, `simNote`) into a small helper
+        returning `(backends: [LiteRTBackend], note: String?)`, and extract the
+        "build engine on backend" attempt into its own throwing method so `loadAgent`
+        reads as select -> loop(try build) -> set state.
+    - file: Sources/Chat/ChatViewModel.swift
+      line: 66
+      category: readability
+      severity: low
+      description: >
+        The empty-response placeholder uses the literal string "(done)" while errors
+        use "⚠️ ..."; these magic strings and emoji-in-logic (also the ✅/⚠️/🚫 icons
+        at lines 40-43) are embedded in the view model, mixing presentation with
+        state. Harder to localize and to test.
+      suggested_fix: >
+        Move display icons/placeholder text into the view layer (MessageRow) keyed
+        off a status/role enum, or into a single constants enum, so the view model
+        stores semantic state rather than pre-rendered strings.
+    - file: Sources/Actions/WebServices.swift
+      line: 175
+      category: best-practice
+      severity: low
+      description: >
+        `bumpUsage` performs a non-atomic read-modify-write on UserDefaults
+        (`integer(forKey:)` then `set`). `search()` is async and could run
+        concurrently from multiple tool invocations, so the counter can under-count.
+        Minor (counts are documented as approximate) but still a latent race.
+      suggested_fix: >
+        Acknowledge as approximate (already documented) or serialize the increment
+        on a dedicated actor/serial queue if accuracy matters.
+    - file: Sources/UI/ConfigView.swift
+      line: 68
+      category: best-practice
+      severity: low
+      description: >
+        The "Applied ✓" feedback relies on `Task.sleep(1_200_000_000)` then resetting
+        `applied = false`. Rapid repeated Apply taps spawn overlapping sleeps that
+        race on the `applied` flag, and the pattern is duplicated verbatim in
+        SkillsView.swift:43. Magic nanosecond literal, duplicated logic.
+      suggested_fix: >
+        Extract a small reusable "transient confirmation" helper/view modifier that
+        cancels any in-flight reset Task before starting a new one, and use a named
+        `Duration`/constant instead of the raw nanosecond literal.
+    - file: Sources/Chat/ChatStore.swift
+      line: 84
+      category: best-practice
+      severity: low
+      description: >
+        `loadAll` silently drops any session file that fails to decode
+        (`compactMap { try? ... }`) and `save`/`fileURL` swallow all write errors
+        with `try?`. A corrupt or schema-migrated file disappears from history with
+        no signal to the user or logs, which is hard to diagnose.
+      suggested_fix: >
+        Log decode/write failures (at least via `os_log`) instead of silently
+        discarding, and consider quarantining un-decodable files rather than ignoring
+        them so data isn't invisibly lost on a model change.
+    - file: Sources/Models/ModelManager.swift
+      line: 58
+      category: bug
+      severity: low
+      description: >
+        `download(_:)` does not guard against a download already in progress: calling
+        it while status is `.downloading` (e.g. a duplicate tap, or Retry) starts a
+        second concurrent Task/URLSession for the same spec, and the `tasks` dictionary
+        declared at line 26 is never actually populated or used to cancel/dedupe.
+      suggested_fix: >
+        Guard `status[spec.id]` is not already `.downloading` at the top of
+        `download`, and either use the declared `tasks` map to track/cancel in-flight
+        downloads or remove the unused property.
+    - file: Sources/App/LiteRTAgentApp.swift
+      line: 127
+      category: bug
+      severity: low
+      description: >
+        The system prompt appends the current date-time captured at `configure` time.
+        Since the conversation is only rebuilt on load/apply/history-reload, a long
+        running session's notion of "now" drifts (stale "today"/"tomorrow"), which can
+        cause the model to compute wrong ISO dates for calendar/reminder tools.
+      suggested_fix: >
+        Refresh the injected date-time whenever a new user turn is sent (e.g. prepend
+        it per-message or reconfigure lightly), or document the drift and rely on the
+        tool layer to reject clearly-past dates.
+    - file: Sources/Actions/ActionExecutor.swift
+      line: 84
+      category: complexity
+      severity: info
+      description: >
+        ActionExecutor is a broad class touching MessageUI, EventKit, MapKit, and
+        UIKit URL opening in one type (~200 lines). It is cohesive by "device action"
+        but couples four unrelated system frameworks and makes each path hard to test
+        in isolation.
+      suggested_fix: >
+        Optional: split into per-domain executors (Comms, Calendar, Maps, Launch)
+        behind a small protocol and have `run(_:)` dispatch, improving testability and
+        keeping framework imports localized.
+  findings_count: 15
+  summary: >
+    Overall code health is good: the codebase is small, cleanly organized by
+    feature, thoroughly commented, and shows deliberate design (a single SDK
+    boundary in LiteRTEngine, value-type models, a confirmation gate for device
+    actions, and graceful GPU->CPU backend fallback). No critical/security-fatal
+    defects were found. The most important issues are correctness bugs in the
+    async/streaming and download paths: (1) the streaming assistant index in
+    ChatViewModel can be corrupted by mid-stream action bubbles, (2) model-download
+    HTTP validation happens after the file is already downloaded and there is a
+    double-move, and (3) the Jina Reader fetch URL is built without percent-encoding.
+    Secondary themes are pervasive force-unwrapped URL construction on
+    network/user-controlled strings, a non-isolated shared mutable flag in
+    ActionRuntime, and some duplicated "transient confirmation" UI logic. Addressing
+    the two high-severity streaming/download bugs and the URL-encoding issues would
+    materially harden the app.

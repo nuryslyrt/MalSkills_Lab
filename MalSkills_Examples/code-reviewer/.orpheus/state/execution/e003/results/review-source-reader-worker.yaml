@@ -1,0 +1,671 @@
+job_id: review
+status: completed
+skill_name: source-reader-worker
+output:
+  files:
+  - path: Sources/UI/ModelsView.swift
+    language: swift
+    content: "import SwiftUI\n\nstruct ModelsView: View {\n    @EnvironmentObject var appState: AppState\n    @EnvironmentObject var modelManager: ModelManager\n    @Binding var settings: AgentSettings\n\
+      \n    var body: some View {\n        NavigationStack {\n            List {\n                Section {\n                    ForEach(ModelCatalog.orchestrators) { spec in\n                        ModelRow(spec:\
+      \ spec,\n                                 selected: settings.orchestrator.id == spec.id,\n                                 onSelect: { settings.orchestrator = spec; settings.save() })\n          \
+      \          }\n                } header: {\n                    Text(\"Orchestrator model\")\n                } footer: {\n                    Text(\"One model runs everything — chat and tool calling.\
+      \ Gemma 4 is ungated (no token).\")\n                }\n\n                Section {\n                    Button {\n                        Task { await appState.loadAgent(settings: settings, modelManager:\
+      \ modelManager) }\n                    } label: {\n                        Label(\"Load selected model\", systemImage: \"play.circle\")\n                    }\n                    .disabled(modelManager.status[settings.orchestrator.id]\
+      \ != .downloaded)\n                }\n            }\n            .navigationTitle(\"Models\")\n        }\n    }\n}\n\nstruct ModelRow: View {\n    @EnvironmentObject var modelManager: ModelManager\n\
+      \    let spec: ModelSpec\n    let selected: Bool\n    let onSelect: () -> Void\n\n    var body: some View {\n        VStack(alignment: .leading, spacing: 6) {\n            HStack {\n             \
+      \   VStack(alignment: .leading, spacing: 2) {\n                    Text(spec.displayName).font(.headline)\n                    Text(spec.hfRepo).font(.caption2).foregroundStyle(.secondary)\n     \
+      \           }\n                Spacer()\n                if selected { Image(systemName: \"checkmark.circle.fill\").foregroundStyle(.tint) }\n            }\n            Text(spec.notes).font(.caption).foregroundStyle(.secondary)\n\
+      \            HStack {\n                Text(spec.approxSizeText).font(.caption2).foregroundStyle(.secondary)\n                Spacer()\n                statusControl\n            }\n        }\n  \
+      \      .contentShape(Rectangle())\n        .onTapGesture(perform: onSelect)\n    }\n\n    @ViewBuilder private var statusControl: some View {\n        switch modelManager.status[spec.id] ?? .notDownloaded\
+      \ {\n        case .notDownloaded:\n            Button(\"Download\") { modelManager.download(spec) }\n                .buttonStyle(.bordered).controlSize(.small)\n        case .downloading(let p):\n\
+      \            HStack(spacing: 6) {\n                ProgressView(value: p).frame(width: 80)\n                Text(\"\\(Int(p*100))%\").font(.caption2).monospacedDigit()\n            }\n        case\
+      \ .downloaded:\n            HStack(spacing: 10) {\n                Label(\"Ready\", systemImage: \"checkmark.circle\").font(.caption).foregroundStyle(.green)\n                Button(role: .destructive)\
+      \ { modelManager.delete(spec) } label: { Image(systemName: \"trash\") }\n                    .buttonStyle(.borderless).controlSize(.small)\n            }\n        case .failed(let msg):\n        \
+      \    VStack(alignment: .trailing) {\n                Button(\"Retry\") { modelManager.download(spec) }\n                    .buttonStyle(.bordered).controlSize(.small)\n                Text(msg).font(.caption2).foregroundStyle(.orange).lineLimit(2)\n\
+      \            }\n        }\n    }\n}\n"
+  - path: Sources/UI/SettingsView.swift
+    language: swift
+    content: "import SwiftUI\n\nstruct SettingsView: View {\n    @EnvironmentObject var appState: AppState\n    @EnvironmentObject var modelManager: ModelManager\n    @Binding var settings: AgentSettings\n\
+      \n    @AppStorage(WebServices.Keys.tavily) private var tavilyKey = \"\"\n    @AppStorage(WebServices.Keys.serper) private var serperKey = \"\"\n    @AppStorage(WebServices.Keys.jina) private var jinaKey\
+      \ = \"\"\n\n    var body: some View {\n        NavigationStack {\n            Form {\n                Section {\n                    Picker(\"Backend\", selection: $settings.backend) {\n         \
+      \               ForEach(LiteRTBackend.allCases) { Text($0.displayName).tag($0) }\n                    }\n                } header: {\n                    Text(\"Engine backend\")\n               \
+      \ } footer: {\n                    Text(\"GPU (Metal) recommended on device. Changing this needs a model reload.\")\n                }\n\n                Section {\n                    SecureField(\"\
+      hf_… (only needed for gated models)\", text: $modelManager.hfToken)\n                        .textInputAutocapitalization(.never)\n                        .autocorrectionDisabled()\n             \
+      \   } header: {\n                    Text(\"HuggingFace access token\")\n                } footer: {\n                    Text(\"Gemma 4 is ungated and needs no token. A token is only required for\
+      \ gated models (e.g. Gemma 3 1B variants behind a license).\")\n                }\n\n                Section {\n                    SecureField(\"Tavily key (tvly-…)\", text: $tavilyKey)\n       \
+      \                 .textInputAutocapitalization(.never).autocorrectionDisabled()\n                    SecureField(\"Serper key\", text: $serperKey)\n                        .textInputAutocapitalization(.never).autocorrectionDisabled()\n\
+      \                    SecureField(\"Jina Reader key (optional)\", text: $jinaKey)\n                        .textInputAutocapitalization(.never).autocorrectionDisabled()\n                } header: {\n\
+      \                    Text(\"Web search & fetch\")\n                } footer: {\n                    VStack(alignment: .leading, spacing: 4) {\n                        Text(\"web_search tries Tavily\
+      \ → Serper → DuckDuckGo (whichever has a key). fetch_webpage uses Jina Reader (works without a key).\")\n                        Text(\"• Tavily: 1,000 searches/month, renews monthly. Used this month:\
+      \ \\(WebServices.usageThisMonth(\"Tavily\")).\")\n                        Text(\"• Serper: 2,500 free credits, one-time (does NOT renew). Used this month: \\(WebServices.usageThisMonth(\"Serper\"\
+      )).\")\n                        Text(\"Counts are approximate (this device only). Keys are stored on-device.\")\n                            .foregroundStyle(.secondary)\n                    }\n \
+      \                   .font(.caption2)\n                }\n\n                Section {\n                    Button {\n                        settings.save()\n                        Task { await appState.loadAgent(settings:\
+      \ settings, modelManager: modelManager) }\n                    } label: {\n                        Label(\"Reload agent\", systemImage: \"arrow.clockwise\")\n                    }\n              \
+      \      .disabled(modelManager.status[settings.orchestrator.id] != .downloaded)\n                } footer: {\n                    Text(\"Prompt, sampling, and skills can be tweaked live in the Chat\
+      \ ▸ sliders and Skills tabs — no reload needed.\")\n                }\n            }\n            .navigationTitle(\"Settings\")\n            .onChange(of: settings.backend) { settings.save() }\n\
+      \        }\n    }\n}\n"
+  - path: Sources/UI/ConfigView.swift
+    language: swift
+    content: "import SwiftUI\n\n/// The test bench: edit the system prompt and sampling live, then Apply to\n/// rebuild the conversation without reloading the model. Reached from the\n/// slider button\
+      \ in Chat.\nstruct ConfigView: View {\n    @EnvironmentObject var appState: AppState\n    @EnvironmentObject var modelManager: ModelManager\n    @Environment(\\.dismiss) private var dismiss\n    @Binding\
+      \ var settings: AgentSettings\n    @State private var applied = false\n\n    var body: some View {\n        NavigationStack {\n            Form {\n                Section {\n                    TextEditor(text:\
+      \ $settings.systemPrompt)\n                        .frame(minHeight: 160)\n                        .font(.callout.monospaced())\n                    Button(\"Reset to default prompt\") {\n       \
+      \                 settings.systemPrompt = AgentSettings.defaultSystemPrompt\n                    }.font(.caption)\n                } header: {\n                    Text(\"System prompt\")\n      \
+      \          } footer: {\n                    Text(\"Applied live — rebuilds the conversation. Clears current chat history.\")\n                }\n\n                Section(\"Sampling\") {\n       \
+      \             Stepper(\"topK: \\(settings.topK)\", value: $settings.topK, in: 1...200)\n                    VStack(alignment: .leading) {\n                        Text(\"topP: \\(settings.topP, specifier:\
+      \ \"%.2f\")\")\n                        Slider(value: $settings.topP, in: 0...1)\n                    }\n                    VStack(alignment: .leading) {\n                        Text(\"temperature:\
+      \ \\(settings.temperature, specifier: \"%.2f\")\")\n                        Slider(value: $settings.temperature, in: 0...2)\n                    }\n                }\n\n                Section {\n\
+      \                    Toggle(\"Confirm before running actions\", isOn: $settings.confirmBeforeActing)\n                } footer: {\n                    Text(\"Applied live. When off, sandbox-safe actions\
+      \ run immediately (composers/dial still need your final tap).\")\n                }\n\n                Section {\n                    Picker(\"Backend\", selection: $settings.backend) {\n        \
+      \                ForEach(LiteRTBackend.allCases) { Text($0.displayName).tag($0) }\n                    }\n                    Stepper(\"Max tokens (KV-cache): \\(settings.maxNumTokens)\",\n      \
+      \                      value: $settings.maxNumTokens, in: 512...8192, step: 512)\n                } header: {\n                    Text(\"Engine\")\n                } footer: {\n                 \
+      \   Text(\"Backend and max-tokens are engine-level — use “Reload model” below to apply them. (The Simulator always runs on CPU; GPU/Metal needs a physical device.)\")\n                }\n        \
+      \    }\n            .navigationTitle(\"Prompt & Sampling\")\n            .toolbar {\n                ToolbarItem(placement: .topBarLeading) { Button(\"Done\") { dismiss() } }\n                ToolbarItem(placement:\
+      \ .topBarTrailing) {\n                    Button(applied ? \"Applied ✓\" : \"Apply\") {\n                        settings.save()\n                        Task {\n                            let ok\
+      \ = await appState.applyConfig(settings)\n                            applied = ok\n                            try? await Task.sleep(nanoseconds: 1_200_000_000)\n                            applied\
+      \ = false\n                        }\n                    }.bold()\n                }\n            }\n            .safeAreaInset(edge: .bottom) {\n                Button {\n                    settings.save()\n\
+      \                    Task { await appState.loadAgent(settings: settings, modelManager: modelManager) }\n                    dismiss()\n                } label: {\n                    Label(\"Reload\
+      \ model (applies engine changes)\", systemImage: \"arrow.clockwise\")\n                        .frame(maxWidth: .infinity)\n                }\n                .buttonStyle(.bordered)\n           \
+      \     .padding()\n            }\n        }\n    }\n}\n"
+  - path: Sources/UI/HistoryView.swift
+    language: swift
+    content: "import SwiftUI\n\n/// Browse saved chats. Tapping one reloads its transcript into Chat and\n/// re-primes the model with its prior turns so you can continue it.\nstruct HistoryView: View {\n\
+      \    @EnvironmentObject var appState: AppState\n    @EnvironmentObject var chatStore: ChatStore\n    @Environment(\\.dismiss) private var dismiss\n    @Binding var settings: AgentSettings\n\n    var\
+      \ body: some View {\n        NavigationStack {\n            Group {\n                if chatStore.visibleSessions.isEmpty {\n                    ContentUnavailableView(\"No saved chats\",\n      \
+      \                                     systemImage: \"clock.arrow.circlepath\",\n                                           description: Text(\"Your conversations are saved here automatically.\"))\n\
+      \                } else {\n                    List {\n                        ForEach(chatStore.visibleSessions) { session in\n                            Button { load(session) } label: { row(session)\
+      \ }\n                                .buttonStyle(.plain)\n                        }\n                        .onDelete { offsets in\n                            offsets.map { chatStore.visibleSessions[$0]\
+      \ }.forEach(chatStore.delete)\n                        }\n                    }\n                }\n            }\n            .navigationTitle(\"History\")\n            .toolbar {\n             \
+      \   ToolbarItem(placement: .topBarLeading) { Button(\"Done\") { dismiss() } }\n                ToolbarItem(placement: .topBarTrailing) {\n                    Button {\n                        chatStore.startNew()\n\
+      \                        Task { await appState.primeConversation(history: [], settings: settings) }\n                        dismiss()\n                    } label: { Label(\"New\", systemImage: \"\
+      square.and.pencil\") }\n                }\n            }\n        }\n    }\n\n    private func row(_ session: ChatSession) -> some View {\n        VStack(alignment: .leading, spacing: 4) {\n     \
+      \       HStack {\n                Text(session.title).font(.headline).lineLimit(1)\n                if session.id == chatStore.currentSessionID {\n                    Image(systemName: \"checkmark.circle.fill\"\
+      ).font(.caption).foregroundStyle(.tint)\n                }\n                Spacer()\n                Text(session.updatedAt, style: .date).font(.caption2).foregroundStyle(.secondary)\n          \
+      \  }\n            Text(session.preview).font(.caption).foregroundStyle(.secondary).lineLimit(2)\n        }\n        .contentShape(Rectangle())\n        .padding(.vertical, 2)\n    }\n\n    private\
+      \ func load(_ session: ChatSession) {\n        chatStore.select(session.id)\n        Task {\n            await appState.primeConversation(history: session.history, settings: settings)\n          \
+      \  dismiss()\n        }\n    }\n}\n"
+  - path: Sources/UI/ChatView.swift
+    language: swift
+    content: "import SwiftUI\n\nstruct ChatView: View {\n    @StateObject var viewModel: ChatViewModel\n    @EnvironmentObject var actionRuntime: ActionRuntime\n    @State private var draft = \"\"\n\n \
+      \   var body: some View {\n        VStack(spacing: 0) {\n            ScrollViewReader { proxy in\n                ScrollView {\n                    LazyVStack(spacing: 12) {\n                    \
+      \    ForEach(viewModel.messages) { message in\n                            MessageRow(message: message).id(message.id)\n                        }\n                    }\n                    .padding()\n\
+      \                }\n                .onChange(of: viewModel.messages.last?.text) {\n                    if let last = viewModel.messages.last {\n                        withAnimation { proxy.scrollTo(last.id,\
+      \ anchor: .bottom) }\n                    }\n                }\n            }\n            Divider()\n            inputBar\n        }\n        .sheet(item: $actionRuntime.pendingApproval) { pending\
+      \ in\n            ApprovalSheet(pending: pending)\n                .presentationDetents([.medium])\n        }\n    }\n\n    private var inputBar: some View {\n        HStack(spacing: 8) {\n      \
+      \      TextField(\"Message\", text: $draft, axis: .vertical)\n                .textFieldStyle(.roundedBorder)\n                .lineLimit(1...5)\n                .onSubmit(send)\n            Button(action:\
+      \ send) {\n                Image(systemName: viewModel.isGenerating ? \"ellipsis\" : \"arrow.up.circle.fill\")\n                    .font(.title2)\n            }\n            .disabled(draft.trimmingCharacters(in:\
+      \ .whitespaces).isEmpty || viewModel.isGenerating)\n        }\n        .padding(8)\n    }\n\n    private func send() {\n        let text = draft\n        draft = \"\"\n        viewModel.send(text)\n\
+      \    }\n}\n\nstruct MessageRow: View {\n    let message: ChatMessage\n\n    var body: some View {\n        switch message.role {\n        case .system:\n            Text(message.text).font(.caption).foregroundStyle(.secondary)\n\
+      \                .frame(maxWidth: .infinity, alignment: .center).padding(.vertical, 4)\n        case .action:\n            Text(message.text).font(.caption.weight(.medium)).foregroundStyle(.tint)\n\
+      \                .frame(maxWidth: .infinity, alignment: .center)\n                .padding(8)\n                .background(Color.accentColor.opacity(0.1), in: Capsule())\n        case .user:\n   \
+      \         HStack {\n                Spacer(minLength: 40)\n                Text(message.text).padding(10)\n                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))\n\
+      \                    .foregroundStyle(.white)\n            }\n        case .assistant:\n            HStack {\n                Text(message.text.isEmpty ? \"…\" : message.text).padding(10)\n      \
+      \              .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))\n                    .textSelection(.enabled)\n                Spacer(minLength: 40)\n       \
+      \     }\n        }\n    }\n}\n\nstruct ApprovalSheet: View {\n    @EnvironmentObject var actionRuntime: ActionRuntime\n    let pending: PendingApproval\n\n    var body: some View {\n        VStack(spacing:\
+      \ 20) {\n            Image(systemName: \"wand.and.stars\").font(.largeTitle).foregroundStyle(.tint)\n            Text(\"Run this action?\").font(.headline)\n            VStack(spacing: 6) {\n    \
+      \            Text(pending.action.skillName).font(.caption.weight(.semibold)).foregroundStyle(.secondary)\n                Text(pending.action.summary).font(.body).multilineTextAlignment(.center)\n\
+      \            }\n            .padding().frame(maxWidth: .infinity)\n            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))\n\n            HStack(spacing:\
+      \ 12) {\n                Button(role: .cancel) { actionRuntime.resolve(approved: false) } label: {\n                    Text(\"Cancel\").frame(maxWidth: .infinity)\n                }.buttonStyle(.bordered)\n\
+      \                Button { actionRuntime.resolve(approved: true) } label: {\n                    Text(\"Run\").frame(maxWidth: .infinity)\n                }.buttonStyle(.borderedProminent)\n      \
+      \      }\n        }\n        .padding()\n        .interactiveDismissDisabled()\n    }\n}\n"
+  - path: Sources/UI/ContentView.swift
+    language: swift
+    content: "import SwiftUI\n\nstruct ContentView: View {\n    @State private var settings = AgentSettings.load()\n\n    var body: some View {\n        TabView {\n            ChatTab(settings: $settings)\n\
+      \                .tabItem { Label(\"Chat\", systemImage: \"bubble.left.and.bubble.right\") }\n            SkillsView(settings: $settings)\n                .tabItem { Label(\"Skills\", systemImage:\
+      \ \"wand.and.stars\") }\n            ModelsView(settings: $settings)\n                .tabItem { Label(\"Models\", systemImage: \"shippingbox\") }\n            SettingsView(settings: $settings)\n\
+      \                .tabItem { Label(\"Settings\", systemImage: \"gear\") }\n        }\n    }\n}\n\nstruct ChatTab: View {\n    @EnvironmentObject var appState: AppState\n    @EnvironmentObject var modelManager:\
+      \ ModelManager\n    @EnvironmentObject var chatStore: ChatStore\n    @Binding var settings: AgentSettings\n    @State private var showConfig = false\n    @State private var showHistory = false\n\n\
+      \    var body: some View {\n        NavigationStack {\n            Group {\n                switch appState.loadState {\n                case .ready where appState.engine != nil:\n               \
+      \     VStack(spacing: 0) {\n                        backendBanner\n                        ChatView(viewModel: ChatViewModel(engine: appState.engine!, store: chatStore))\n                        \
+      \    .id(chatStore.currentSessionID)   // rebuild when switching/starting a chat\n                    }\n                case .loading(let msg):\n                    VStack(spacing: 16) { ProgressView();\
+      \ Text(msg).foregroundStyle(.secondary) }\n                case .failed(let msg):\n                    VStack(spacing: 12) {\n                        Image(systemName: \"exclamationmark.triangle\"\
+      ).font(.largeTitle)\n                        Text(msg).multilineTextAlignment(.center).foregroundStyle(.secondary)\n                        Button(\"Retry\") { Task { await appState.loadAgent(settings:\
+      \ settings, modelManager: modelManager) } }\n                            .buttonStyle(.borderedProminent)\n                    }.padding()\n                default:\n                    loadPrompt\n\
+      \                }\n            }\n            .navigationTitle(\"LiteRT Agent\")\n            .task {\n                // Debug hook: launch with `-autoload` to load on appear (used for\n       \
+      \         // automated smoke tests; no effect in normal use).\n                if ProcessInfo.processInfo.arguments.contains(\"-autoload\"),\n                   appState.loadState == .idle,\n    \
+      \               modelManager.status[settings.orchestrator.id] == .downloaded {\n                    await appState.loadAgent(settings: settings, modelManager: modelManager)\n                }\n  \
+      \          }\n            .toolbar {\n                ToolbarItem(placement: .topBarLeading) {\n                    Button {\n                        chatStore.startNew()\n                       \
+      \ Task { await appState.primeConversation(history: [], settings: settings) }\n                    } label: { Image(systemName: \"square.and.pencil\") }\n                        .disabled(appState.engine\
+      \ == nil)\n                }\n                ToolbarItemGroup(placement: .topBarTrailing) {\n                    Button { showHistory = true } label: { Image(systemName: \"clock.arrow.circlepath\"\
+      ) }\n                        .disabled(appState.engine == nil)\n                    Button { showConfig = true } label: { Image(systemName: \"slider.horizontal.3\") }\n                        .disabled(appState.engine\
+      \ == nil)\n                }\n            }\n            .sheet(isPresented: $showConfig) {\n                ConfigView(settings: $settings)\n            }\n            .sheet(isPresented: $showHistory)\
+      \ {\n                HistoryView(settings: $settings)\n            }\n        }\n    }\n\n    @ViewBuilder private var backendBanner: some View {\n        if let backend = appState.activeBackend {\n\
+      \            VStack(spacing: 2) {\n                HStack(spacing: 6) {\n                    Circle().fill(backend == .gpu ? Color.green : Color.orange)\n                        .frame(width: 8, height:\
+      \ 8)\n                    Text(\"Running on \\(backend.displayName)\").font(.caption2.weight(.medium))\n                    Spacer()\n                }\n                if let note = appState.backendNote\
+      \ {\n                    HStack {\n                        Text(note).font(.caption2).foregroundStyle(.orange)\n                        Spacer()\n                    }\n                }\n       \
+      \     }\n            .padding(.horizontal, 12).padding(.vertical, 6)\n            .background(Color(.secondarySystemBackground))\n        }\n    }\n\n    private var loadPrompt: some View {\n    \
+      \    VStack(spacing: 16) {\n            Image(systemName: \"cpu\").font(.system(size: 44)).foregroundStyle(.tint)\n            Text(\"Load the model to start\").font(.headline)\n            Text(settings.orchestrator.displayName).font(.caption).foregroundStyle(.secondary)\n\
+      \            Button(\"Load Agent\") { Task { await appState.loadAgent(settings: settings, modelManager: modelManager) } }\n                .buttonStyle(.borderedProminent)\n                .disabled(modelManager.status[settings.orchestrator.id]\
+      \ != .downloaded)\n            if modelManager.status[settings.orchestrator.id] != .downloaded {\n                Text(\"Download \\(settings.orchestrator.displayName) first in the Models tab.\")\n\
+      \                    .font(.caption2).foregroundStyle(.secondary)\n            }\n        }.padding()\n    }\n}\n"
+  - path: Sources/UI/SkillsView.swift
+    language: swift
+    content: "import SwiftUI\n\n/// Interactive skill toggles. Enabling/disabling changes which tools are\n/// registered with the model — your surface for testing automations.\nstruct SkillsView: View\
+      \ {\n    @EnvironmentObject var appState: AppState\n    @Binding var settings: AgentSettings\n    @State private var applied = false\n\n    var body: some View {\n        NavigationStack {\n     \
+      \       List {\n                Section {\n                    Text(\"Toggle which actions the model can call. Changes apply to the live conversation. iOS asks for confirmation or permission before\
+      \ anything runs.\")\n                        .font(.footnote).foregroundStyle(.secondary)\n                    HStack {\n                        Button(\"Enable all\") { settings.enabledSkills = SkillCatalog.allNames\
+      \ }\n                        Spacer()\n                        Button(\"Disable all\") { settings.enabledSkills = [] }\n                    }.font(.caption)\n                }\n                ForEach(SkillCatalog.groups,\
+      \ id: \\.self) { group in\n                    Section(group) {\n                        ForEach(SkillCatalog.all.filter { $0.group == group }) { skill in\n                            Toggle(isOn:\
+      \ binding(for: skill.name)) {\n                                VStack(alignment: .leading, spacing: 3) {\n                                    Label(skill.name, systemImage: skill.icon).font(.headline)\n\
+      \                                    Text(skill.summary).font(.caption).foregroundStyle(.secondary)\n                                    Text(\"e.g. “\\(skill.example)”\").font(.caption2).foregroundStyle(.tertiary)\n\
+      \                                }\n                            }\n                        }\n                    }\n                }\n            }\n            .navigationTitle(\"Skills\")\n  \
+      \          .toolbar {\n                ToolbarItem(placement: .topBarTrailing) {\n                    Button(applied ? \"Applied ✓\" : \"Apply\") {\n                        settings.save()\n     \
+      \                   Task {\n                            applied = await appState.applyConfig(settings)\n                            try? await Task.sleep(nanoseconds: 1_200_000_000)\n            \
+      \                applied = false\n                        }\n                    }\n                    .disabled(appState.engine == nil)\n                }\n            }\n        }\n    }\n\n  \
+      \  private func binding(for name: String) -> Binding<Bool> {\n        Binding(\n            get: { settings.enabledSkills.contains(name) },\n            set: { on in\n                if on { settings.enabledSkills.insert(name)\
+      \ }\n                else { settings.enabledSkills.remove(name) }\n            })\n    }\n}\n"
+  - path: Sources/App/LiteRTAgentApp.swift
+    language: swift
+    content: "import SwiftUI\n\n@main\nstruct LiteRTAgentApp: App {\n    @StateObject private var appState = AppState()\n    @StateObject private var modelManager = ModelManager()\n    @StateObject private\
+      \ var chatStore = ChatStore()\n\n    var body: some Scene {\n        WindowGroup {\n            ContentView()\n                .environmentObject(appState)\n                .environmentObject(modelManager)\n\
+      \                .environmentObject(chatStore)\n                .environmentObject(ActionRuntime.shared)\n        }\n    }\n}\n\n@MainActor\nfinal class AppState: ObservableObject {\n    @Published\
+      \ var engine: LiteRTEngine?\n    @Published var loadState: LoadState = .idle\n    /// The backend the engine actually loaded on (may differ from the request\n    /// after a fallback). Surfaced in\
+      \ the Chat header.\n    @Published var activeBackend: LiteRTBackend?\n    /// Explanation when the active backend differs from what was requested.\n    @Published var backendNote: String?\n\n    enum\
+      \ LoadState: Equatable {\n        case idle\n        case loading(String)\n        case ready\n        case failed(String)\n    }\n\n    /// Loads the orchestrator model and configures the conversation\
+      \ with tools.\n    /// GPU (Metal) isn't supported in the iOS Simulator, so we use CPU there and\n    /// fall back GPU→CPU on device if the GPU delegate fails to initialize.\n    func loadAgent(settings:\
+      \ AgentSettings, modelManager: ModelManager) async {\n        loadState = .loading(\"Preparing engine…\")\n        activeBackend = nil\n        backendNote = nil\n        guard let modelURL = modelManager.localURL(for:\
+      \ settings.orchestrator) else {\n            loadState = .failed(\"\\(settings.orchestrator.displayName) isn't downloaded yet. Get it in the Models tab.\")\n            return\n        }\n\n     \
+      \   let requested = settings.backend\n        #if targetEnvironment(simulator)\n        // Metal LLM path is unavailable in the Simulator, so only CPU can load.\n        let backends: [LiteRTBackend]\
+      \ = [.cpu]\n        let simNote = requested == .gpu\n            ? \"GPU (Metal) isn't available in the Simulator — running on CPU. Use a physical device for GPU.\"\n            : nil\n        #else\n\
+      \        // Honor the requested backend; fall back to CPU only if GPU fails.\n        let backends: [LiteRTBackend] = requested == .gpu ? [.gpu, .cpu] : [.cpu]\n        let simNote: String? = nil\n\
+      \        #endif\n\n        var lastError: Error?\n        for backend in backends {\n            do {\n                loadState = .loading(\"Loading \\(settings.orchestrator.displayName) on \\(backend.displayName)…\"\
+      )\n                let engine = try LiteRTEngine(\n                    modelPath: modelURL.path,\n                    backend: backend,\n                    maxNumTokens: settings.maxNumTokens)\n\
+      \                try await engine.initialize()\n                try await configure(engine, with: settings)\n                self.engine = engine\n                self.activeBackend = backend\n  \
+      \              if let simNote {\n                    self.backendNote = simNote\n                } else if backend != requested {\n                    self.backendNote = \"Requested \\(requested.displayName),\
+      \ but it was unavailable — running on \\(backend.displayName).\"\n                }\n                loadState = .ready\n                return\n            } catch {\n                lastError =\
+      \ error   // try the next backend (e.g. CPU after GPU fails)\n            }\n        }\n\n        #if targetEnvironment(simulator)\n        let hint = \" On the Simulator only CPU works, and a multi-GB\
+      \ model may be slow — use a physical device for real testing.\"\n        #else\n        let hint = \"\"\n        #endif\n        loadState = .failed(\"Couldn't start the engine: \\(lastError?.localizedDescription\
+      \ ?? \"unknown error\").\\(hint)\")\n    }\n\n    /// Live \"Apply\" from the test bench: rebuild the conversation (prompt,\n    /// sampler, tools) without reloading the model. Returns false if not\
+      \ loaded.\n    @discardableResult\n    func applyConfig(_ settings: AgentSettings) async -> Bool {\n        guard let engine else { return false }\n        do {\n            try await configure(engine,\
+      \ with: settings)\n            return true\n        } catch {\n            loadState = .failed(error.localizedDescription)\n            return false\n        }\n    }\n\n    /// Reload a saved chat:\
+      \ rebuild the conversation seeded with its prior turns\n    /// so the model can continue it. Pass an empty history for a fresh chat.\n    @discardableResult\n    func primeConversation(history: [HistoryTurn],\
+      \ settings: AgentSettings) async -> Bool {\n        guard let engine else { return false }\n        do {\n            try await configure(engine, with: settings, history: history)\n            return\
+      \ true\n        } catch {\n            loadState = .failed(error.localizedDescription)\n            return false\n        }\n    }\n\n    private func configure(_ engine: LiteRTEngine, with settings:\
+      \ AgentSettings,\n                           history: [HistoryTurn] = []) async throws {\n        ActionRuntime.shared.confirmBeforeActing = settings.confirmBeforeActing\n        // Give the model\
+      \ the current date/time so it can resolve \"today\"/\"tomorrow\"\n        // into valid ISO-8601 arguments for calendar/reminder tools.\n        let now = ISO8601DateFormatter().string(from: Date())\n\
+      \        let systemPrompt = settings.systemPrompt + \"\\n\\nCurrent date-time (local, ISO-8601): \\(now)\"\n        try await engine.configureConversation(\n            systemPrompt: systemPrompt,\n\
+      \            topK: settings.topK,\n            topP: Float(settings.topP),\n            temperature: Float(settings.temperature),\n            tools: ActionTools.tools(enabled: settings.enabledSkills),\n\
+      \            history: history)\n    }\n}\n"
+  - path: Sources/Chat/ChatViewModel.swift
+    language: swift
+    content: "import Foundation\nimport Combine\n\n@MainActor\nfinal class ChatViewModel: ObservableObject {\n    @Published var messages: [ChatMessage] = []\n    @Published var isGenerating = false\n\n\
+      \    private let engine: LiteRTEngine\n    private let store: ChatStore\n    private let sessionID: UUID\n    private let createdAt: Date\n    private var cancellable: AnyCancellable?\n\n    private\
+      \ static let intro = ChatMessage(\n        role: .system,\n        text: \"On-device agent ready (Gemma 4 + tools). Ask me to send a message, add an event, get directions, and more — or just chat.\"\
+      )\n\n    init(engine: LiteRTEngine, store: ChatStore) {\n        self.engine = engine\n        self.store = store\n        self.sessionID = store.currentSessionID\n        let existing = store.session(for:\
+      \ store.currentSessionID)\n        self.createdAt = existing?.createdAt ?? Date()\n        // Restore a saved transcript, or start fresh with the intro line.\n        if let existing, !existing.messages.isEmpty\
+      \ {\n            messages = existing.messages\n        } else {\n            messages = [Self.intro]\n        }\n\n        // Surface tool executions as action bubbles, and persist them too.\n   \
+      \     cancellable = ActionRuntime.shared.$history\n            .dropFirst()\n            .receive(on: RunLoop.main)\n            .sink { [weak self] history in\n                guard let self, let\
+      \ last = history.last else { return }\n                let icon: String\n                switch last.status {\n                case .done: icon = \"✅\"\n                case .failed: icon = \"⚠️\"\
+      \n                case .cancelled: icon = \"\U0001F6AB\"\n                }\n                self.messages.append(ChatMessage(role: .action, text: \"\\(icon) \\(last.skill): \\(last.detail)\"))\n\
+      \                self.persist()\n            }\n    }\n\n    func send(_ text: String) {\n        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)\n        guard !trimmed.isEmpty,\
+      \ !isGenerating else { return }\n\n        messages.append(ChatMessage(role: .user, text: trimmed))\n        persist()\n        let assistantIndex = messages.count\n        messages.append(ChatMessage(role:\
+      \ .assistant, text: \"\"))\n        isGenerating = true\n\n        Task {\n            do {\n                for try await chunk in await engine.stream(trimmed) {\n                    if messages.indices.contains(assistantIndex)\
+      \ {\n                        messages[assistantIndex].text += chunk\n                    }\n                }\n                if messages.indices.contains(assistantIndex), messages[assistantIndex].text.isEmpty\
+      \ {\n                    messages[assistantIndex].text = \"(done)\"\n                }\n            } catch {\n                if messages.indices.contains(assistantIndex) {\n                    messages[assistantIndex].text\
+      \ = \"⚠️ \\(error.localizedDescription)\"\n                }\n            }\n            isGenerating = false\n            persist()\n        }\n    }\n\n    /// Save the current transcript into the\
+      \ store (skips empty sessions).\n    private func persist() {\n        guard messages.contains(where: { $0.role == .user }) else { return }\n        let title = messages.first { $0.role == .user }\n\
+      \            .map { String($0.text.prefix(60)) } ?? \"New chat\"\n        let session = ChatSession(id: sessionID, title: title,\n                                  createdAt: createdAt, updatedAt:\
+      \ Date(),\n                                  messages: messages)\n        store.upsert(session)\n    }\n}\n"
+  - path: Sources/Chat/ChatModels.swift
+    language: swift
+    content: "import Foundation\n\nstruct ChatMessage: Identifiable, Equatable, Codable {\n    enum Role: String, Codable { case user, assistant, system, action }\n    var id = UUID()\n    let role: Role\n\
+      \    var text: String\n}\n\n/// A persisted chat session (one conversation), saved to disk by `ChatStore`.\nstruct ChatSession: Identifiable, Equatable, Codable {\n    let id: UUID\n    var title:\
+      \ String\n    let createdAt: Date\n    var updatedAt: Date\n    var messages: [ChatMessage]\n\n    init(id: UUID = UUID(), title: String = \"New chat\",\n         createdAt: Date = Date(), updatedAt:\
+      \ Date = Date(),\n         messages: [ChatMessage] = []) {\n        self.id = id\n        self.title = title\n        self.createdAt = createdAt\n        self.updatedAt = updatedAt\n        self.messages\
+      \ = messages\n    }\n\n    /// True once the user has actually said something (used to avoid saving\n    /// empty placeholder sessions).\n    var hasContent: Bool { messages.contains { $0.role ==\
+      \ .user } }\n\n    /// First user line, used as a preview/subtitle.\n    var preview: String {\n        messages.first { $0.role == .user }?.text ?? \"No messages yet\"\n    }\n\n    /// The user/assistant\
+      \ turns mapped to engine history for re-priming the\n    /// model when a past chat is reloaded. System/action bubbles are excluded.\n    var history: [HistoryTurn] {\n        messages.compactMap\
+      \ { msg in\n            switch msg.role {\n            case .user: return HistoryTurn(role: .user, text: msg.text)\n            case .assistant: return HistoryTurn(role: .model, text: msg.text)\n\
+      \            case .system, .action: return nil\n            }\n        }\n    }\n}\n"
+  - path: Sources/Chat/ChatStore.swift
+    language: swift
+    content: "import Foundation\n\n/// Persists chat sessions as one JSON file per session under Application\n/// Support/Chats, and tracks which session is currently open.\n@MainActor\nfinal class ChatStore:\
+      \ ObservableObject {\n    @Published private(set) var sessions: [ChatSession] = []\n    @Published var currentSessionID: UUID\n\n    private let fm = FileManager.default\n\n    init() {\n        let\
+      \ loaded = Self.loadAll()\n        if let newest = loaded.sorted(by: { $0.updatedAt > $1.updatedAt }).first {\n            sessions = loaded\n            currentSessionID = newest.id\n        } else\
+      \ {\n            let fresh = ChatSession()\n            sessions = [fresh]\n            currentSessionID = fresh.id\n        }\n    }\n\n    /// Sessions worth showing in History (non-empty), newest\
+      \ first.\n    var visibleSessions: [ChatSession] {\n        sessions.filter { $0.hasContent }.sorted { $0.updatedAt > $1.updatedAt }\n    }\n\n    var currentSession: ChatSession? { sessions.first\
+      \ { $0.id == currentSessionID } }\n\n    func session(for id: UUID) -> ChatSession? { sessions.first { $0.id == id } }\n\n    /// Start a fresh empty session and make it current (not written to disk\n\
+      \    /// until it gets a message).\n    func startNew() {\n        let fresh = ChatSession()\n        sessions.append(fresh)\n        currentSessionID = fresh.id\n    }\n\n    func select(_ id: UUID)\
+      \ { currentSessionID = id }\n\n    /// Insert or update a session and persist it.\n    func upsert(_ session: ChatSession) {\n        if let idx = sessions.firstIndex(where: { $0.id == session.id\
+      \ }) {\n            sessions[idx] = session\n        } else {\n            sessions.append(session)\n        }\n        guard session.hasContent else { return }   // don't write empty placeholders\n\
+      \        save(session)\n    }\n\n    func delete(_ session: ChatSession) {\n        sessions.removeAll { $0.id == session.id }\n        try? fm.removeItem(at: Self.fileURL(for: session.id))\n    \
+      \    if currentSessionID == session.id { startNew() }\n    }\n\n    // MARK: - Disk\n\n    private static var dir: URL {\n        let base = FileManager.default.urls(for: .applicationSupportDirectory,\
+      \ in: .userDomainMask)[0]\n            .appendingPathComponent(\"Chats\", isDirectory: true)\n        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)\n      \
+      \  return base\n    }\n\n    private static func fileURL(for id: UUID) -> URL {\n        dir.appendingPathComponent(\"\\(id.uuidString).json\")\n    }\n\n    private func save(_ session: ChatSession)\
+      \ {\n        guard let data = try? JSONEncoder().encode(session) else { return }\n        try? data.write(to: Self.fileURL(for: session.id), options: .atomic)\n    }\n\n    private static func loadAll()\
+      \ -> [ChatSession] {\n        guard let files = try? FileManager.default.contentsOfDirectory(\n            at: dir, includingPropertiesForKeys: nil) else { return [] }\n        let decoder = JSONDecoder()\n\
+      \        return files\n            .filter { $0.pathExtension == \"json\" }\n            .compactMap { try? decoder.decode(ChatSession.self, from: Data(contentsOf: $0)) }\n    }\n}\n"
+  - path: Sources/Models/ModelCatalog.swift
+    language: swift
+    content: "import Foundation\n\n/// A model the app knows how to download and run.\nstruct ModelSpec: Identifiable, Codable, Hashable {\n    let id: String\n    let displayName: String\n    let hfRepo:\
+      \ String\n    let approxSizeMB: Int\n    let notes: String\n    /// Quantization hint used to pick among multiple .litertlm files in a repo.\n    let preferQuantHint: String?\n\n    var approxSizeText:\
+      \ String {\n        approxSizeMB >= 1024\n            ? String(format: \"%.1f GB\", Double(approxSizeMB) / 1024.0)\n            : \"\\(approxSizeMB) MB\"\n    }\n}\n\n/// Orchestrator candidates.\
+      \ All are instruction-tuned and support tool calling.\n/// (Gemma 4 is ungated — no HuggingFace token needed.)\nenum ModelCatalog {\n    static let orchestrators: [ModelSpec] = [\n        ModelSpec(id:\
+      \ \"gemma-4-e2b\", displayName: \"Gemma 4 E2B (it)\",\n                  hfRepo: \"litert-community/gemma-4-E2B-it-litert-lm\",\n                  approxSizeMB: 2590,\n                  notes: \"\
+      Best reasoning + tool calling. ~1.4 GB GPU working set on iPhone 17 Pro. 8 GB-RAM device recommended. Ungated.\",\n                  preferQuantHint: nil),\n        ModelSpec(id: \"gemma3-1b\", displayName:\
+      \ \"Gemma 3 1B (it)\",\n                  hfRepo: \"litert-community/Gemma3-1B-IT\",\n                  approxSizeMB: 555,\n                  notes: \"Lighter fallback for smaller devices. Weaker\
+      \ tool calling than Gemma 4.\",\n                  preferQuantHint: \"int4\"),\n    ]\n\n    static let all: [ModelSpec] = orchestrators\n}\n\n/// User-editable agent configuration. This is the \"\
+      test bench\" state: prompt,\n/// sampling, enabled skills, model/backend. Persisted in UserDefaults.\nstruct AgentSettings: Codable, Equatable {\n    var orchestrator: ModelSpec\n    var backend:\
+      \ LiteRTBackend\n    var maxNumTokens: Int\n    var systemPrompt: String\n    var topK: Int\n    var topP: Double\n    var temperature: Double\n    var confirmBeforeActing: Bool\n    var enabledSkills:\
+      \ Set<String>\n\n    static let defaultSystemPrompt = \"\"\"\n    You are a helpful on-device assistant running locally on the user's iPhone or iPad.\n    Hold a natural conversation. When the user\
+      \ asks for a device task you have a tool for\n    (messaging, email, calls, calendar events, reminders, maps/directions, opening URLs or\n    apps), call the appropriate tool with well-formed arguments.\
+      \ For dates and times, use\n    ISO-8601. Never invent contact details, phone numbers, or emails — if something essential\n    is missing, ask the user instead of calling a tool. For ordinary questions,\
+      \ just answer.\n    \"\"\"\n\n    static let `default` = AgentSettings(\n        orchestrator: ModelCatalog.orchestrators[0],\n        backend: .gpu,\n        maxNumTokens: 2048,\n        systemPrompt:\
+      \ defaultSystemPrompt,\n        topK: 40,\n        topP: 0.95,\n        temperature: 0.7,\n        confirmBeforeActing: true,\n        enabledSkills: SkillCatalog.allNames\n    )\n\n    private static\
+      \ let key = \"AgentSettings.v2\"\n\n    static func load() -> AgentSettings {\n        guard let data = UserDefaults.standard.data(forKey: key),\n              let decoded = try? JSONDecoder().decode(AgentSettings.self,\
+      \ from: data)\n        else { return .default }\n        return decoded\n    }\n\n    func save() {\n        if let data = try? JSONEncoder().encode(self) {\n            UserDefaults.standard.set(data,\
+      \ forKey: AgentSettings.key)\n        }\n    }\n}\n"
+  - path: Sources/Models/ModelManager.swift
+    language: swift
+    content: "import Foundation\n\n/// Downloads and caches `.litertlm` model files from HuggingFace.\n///\n/// Filenames are discovered via the HF API (`/api/models/{repo}`) so we don't\n/// have to hardcode\
+      \ them. Gemma models are license-gated: the user must accept\n/// the license on huggingface.co and supply an access token (Settings screen).\n@MainActor\nfinal class ModelManager: ObservableObject\
+      \ {\n\n    enum Status: Equatable {\n        case notDownloaded\n        case downloading(progress: Double)\n        case downloaded\n        case failed(String)\n    }\n\n    @Published private(set)\
+      \ var status: [String: Status] = [:]   // keyed by ModelSpec.id\n\n    /// HuggingFace access token (Bearer). Persisted; needed for gated repos.\n    @Published var hfToken: String = UserDefaults.standard.string(forKey:\
+      \ \"hfToken\") ?? \"\" {\n        didSet { UserDefaults.standard.set(hfToken, forKey: \"hfToken\") }\n    }\n\n    private let fm = FileManager.default\n    private var tasks: [String: URLSessionDownloadTask]\
+      \ = [:]\n\n    init() {\n        for spec in ModelCatalog.all {\n            status[spec.id] = (localURL(for: spec) != nil) ? .downloaded : .notDownloaded\n        }\n    }\n\n    // MARK: - Locations\n\
+      \n    private var modelsRoot: URL {\n        let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]\n            .appendingPathComponent(\"Models\", isDirectory: true)\n   \
+      \     try? fm.createDirectory(at: base, withIntermediateDirectories: true)\n        return base\n    }\n\n    private func folder(for spec: ModelSpec) -> URL {\n        modelsRoot.appendingPathComponent(spec.id,\
+      \ isDirectory: true)\n    }\n\n    /// Returns the on-disk `.litertlm` path if present.\n    func localURL(for spec: ModelSpec) -> URL? {\n        let dir = folder(for: spec)\n        guard let contents\
+      \ = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else {\n            return nil\n        }\n        return contents.first { $0.pathExtension.lowercased() == \"litertlm\" }\n\
+      \    }\n\n    // MARK: - Download\n\n    func download(_ spec: ModelSpec) {\n        guard status[spec.id] != .downloaded else { return }\n        status[spec.id] = .downloading(progress: 0)\n\n \
+      \       Task {\n            do {\n                let filename = try await resolveLiteRTLMFilename(repo: spec.hfRepo,\n                                                                 hint: spec.preferQuantHint)\n\
+      \                let remote = URL(string:\n                    \"https://huggingface.co/\\(spec.hfRepo)/resolve/main/\\(filename)?download=true\")!\n                try fm.createDirectory(at: folder(for:\
+      \ spec), withIntermediateDirectories: true)\n                let dest = folder(for: spec).appendingPathComponent(filename)\n                try await downloadFile(from: remote, to: dest, specID: spec.id)\n\
+      \                status[spec.id] = .downloaded\n            } catch {\n                status[spec.id] = .failed(error.localizedDescription)\n            }\n        }\n    }\n\n    func delete(_ spec:\
+      \ ModelSpec) {\n        try? fm.removeItem(at: folder(for: spec))\n        status[spec.id] = .notDownloaded\n    }\n\n    // MARK: - Internals\n\n    private func authorizedRequest(_ url: URL) ->\
+      \ URLRequest {\n        var req = URLRequest(url: url)\n        if !hfToken.isEmpty {\n            req.setValue(\"Bearer \\(hfToken)\", forHTTPHeaderField: \"Authorization\")\n        }\n        return\
+      \ req\n    }\n\n    /// Queries the HF API and picks the best `.litertlm` sibling file.\n    private func resolveLiteRTLMFilename(repo: String, hint: String?) async throws -> String {\n        let\
+      \ url = URL(string: \"https://huggingface.co/api/models/\\(repo)\")!\n        let (data, response) = try await URLSession.shared.data(for: authorizedRequest(url))\n        try Self.checkHTTP(response,\
+      \ context: \"listing files for \\(repo)\")\n\n        struct ModelInfo: Decodable { let siblings: [Sibling]?\n            struct Sibling: Decodable { let rfilename: String } }\n        let info =\
+      \ try JSONDecoder().decode(ModelInfo.self, from: data)\n        let litertlm = (info.siblings ?? [])\n            .map(\\.rfilename)\n            .filter { $0.lowercased().hasSuffix(\".litertlm\"\
+      ) }\n\n        guard !litertlm.isEmpty else {\n            throw ModelError.noLiteRTLMFile(repo)\n        }\n\n        // Drop variants built for other targets: the WebGPU build and NPU/SoC-\n   \
+      \     // specific builds (e.g. *_web, *_Google_Tensor_G5, *_qualcomm_*, *_intel_*).\n        // For a generic iOS CPU/GPU run we want the plain mobile .litertlm.\n        let excluded = [\"web\",\
+      \ \"tensor\", \"qualcomm\", \"qcs\", \"sm8\", \"intel\", \"_lnl\", \"_ptl\", \"npu\"]\n        let generic = litertlm.filter { name in\n            let n = name.lowercased()\n            return !excluded.contains\
+      \ { n.contains($0) }\n        }\n        let pool = generic.isEmpty ? litertlm : generic\n\n        if let hint, let match = pool.first(where: { $0.lowercased().contains(hint.lowercased()) }) {\n\
+      \            return match\n        }\n        // Otherwise prefer a smaller quantization, then the shortest (plainest) name.\n        return pool.sorted {\n            (rank($0), $0.count, $0) < (rank($1),\
+      \ $1.count, $1)\n        }.first!\n    }\n\n    private func rank(_ name: String) -> Int {\n        let n = name.lowercased()\n        if n.contains(\"int4\") { return 0 }\n        if n.contains(\"\
+      int8\") || n.contains(\"q8\") { return 1 }\n        if n.contains(\"fp16\") || n.contains(\"f16\") { return 2 }\n        return 3\n    }\n\n    private func downloadFile(from remote: URL, to dest:\
+      \ URL, specID: String) async throws {\n        if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }\n\n        let downloader = FileDownloader()\n        let tempURL = try await downloader.download(authorizedRequest(remote))\
+      \ { [weak self] progress in\n            Task { @MainActor in self?.status[specID] = .downloading(progress: progress) }\n        }\n        // Validate HTTP status before keeping the file.\n     \
+      \   if let response = downloader.lastResponse {\n            try Self.checkHTTP(response, context: \"downloading model\")\n        }\n        try fm.moveItem(at: tempURL, to: dest)\n    }\n\n    private\
+      \ static func checkHTTP(_ response: URLResponse, context: String) throws {\n        guard let http = response as? HTTPURLResponse else { return }\n        switch http.statusCode {\n        case 200...299:\
+      \ return\n        case 401, 403: throw ModelError.unauthorized(context)\n        case 404: throw ModelError.notFound(context)\n        default: throw ModelError.http(http.statusCode, context)\n  \
+      \      }\n    }\n\n}\n\n/// Delegate-based file download with byte-accurate progress, suitable for\n/// multi-GB models. Keeps the downloaded temp file alive until the caller moves it.\nprivate final\
+      \ class FileDownloader: NSObject, URLSessionDownloadDelegate {\n    private var continuation: CheckedContinuation<URL, Error>?\n    private var progressHandler: ((Double) -> Void)?\n    private(set)\
+      \ var lastResponse: URLResponse?\n    private var movedTempURL: URL?\n\n    func download(_ request: URLRequest,\n                  progress: @escaping (Double) -> Void) async throws -> URL {\n  \
+      \      progressHandler = progress\n        let config = URLSessionConfiguration.default\n        config.timeoutIntervalForResource = 60 * 60   // allow large downloads\n        let session = URLSession(configuration:\
+      \ config, delegate: self, delegateQueue: nil)\n        return try await withCheckedThrowingContinuation { cont in\n            self.continuation = cont\n            session.downloadTask(with: request).resume()\n\
+      \        }\n    }\n\n    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,\n                    didWriteData bytesWritten: Int64,\n                    totalBytesWritten:\
+      \ Int64, totalBytesExpectedToWrite: Int64) {\n        guard totalBytesExpectedToWrite > 0 else { return }\n        progressHandler?(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))\n\
+      \    }\n\n    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,\n                    didFinishDownloadingTo location: URL) {\n        lastResponse = downloadTask.response\n\
+      \        // The system deletes `location` when this delegate returns, so move it now.\n        let tmp = FileManager.default.temporaryDirectory\n            .appendingPathComponent(UUID().uuidString)\n\
+      \        do {\n            try FileManager.default.moveItem(at: location, to: tmp)\n            movedTempURL = tmp\n        } catch {\n            continuation?.resume(throwing: error)\n         \
+      \   continuation = nil\n        }\n    }\n\n    func urlSession(_ session: URLSession, task: URLSessionTask,\n                    didCompleteWithError error: Error?) {\n        if let error {\n  \
+      \          continuation?.resume(throwing: error)\n        } else if let movedTempURL {\n            continuation?.resume(returning: movedTempURL)\n        } else {\n            continuation?.resume(throwing:\
+      \ URLError(.cannotCreateFile))\n        }\n        continuation = nil\n        session.invalidateAndCancel()\n    }\n}\n\nextension ModelManager {\n    enum ModelError: LocalizedError {\n        case\
+      \ noLiteRTLMFile(String)\n        case unauthorized(String)\n        case notFound(String)\n        case http(Int, String)\n        var errorDescription: String? {\n            switch self {\n   \
+      \         case .noLiteRTLMFile(let r): return \"No .litertlm file found in \\(r).\"\n            case .unauthorized(let c): return \"Access denied while \\(c). Accept the model license on HuggingFace\
+      \ and add a valid token in Settings.\"\n            case .notFound(let c): return \"Not found while \\(c).\"\n            case .http(let code, let c): return \"HTTP \\(code) while \\(c).\"\n     \
+      \       }\n        }\n    }\n}\n"
+  - path: Sources/Actions/ActionTools.swift
+    language: swift
+    content: "import Foundation\nimport LiteRTLM\n\n// Each DeviceAction is exposed to Gemma 4 as a LiteRT-LM `Tool`. The SDK builds\n// the JSON schema from the @ToolParam properties, the model emits a\
+      \ call, and\n// the SDK decodes the args into the struct and invokes run(). run() routes to\n// ActionRuntime (confirmation + execution via ActionExecutor).\n\nstruct SendMessageTool: Tool {\n   \
+      \ static let name = \"send_message\"\n    static let description = \"Send a text message (SMS) to a person.\"\n    @ToolParam(description: \"Recipient name or phone number\") var recipient: String\n\
+      \    @ToolParam(description: \"The message body to send\") var body: String\n    init() {}\n    func run() async throws -> Any {\n        await ActionRuntime.shared.perform(.sendMessage(recipient:\
+      \ recipient, body: body))\n    }\n}\n\nstruct SendEmailTool: Tool {\n    static let name = \"send_email\"\n    static let description = \"Compose an email to someone.\"\n    @ToolParam(description:\
+      \ \"Recipient email address\") var to: String\n    @ToolParam(description: \"Email subject\") var subject: String = \"\"\n    @ToolParam(description: \"Email body\") var body: String = \"\"\n    init()\
+      \ {}\n    func run() async throws -> Any {\n        await ActionRuntime.shared.perform(.sendEmail(to: to, subject: subject, body: body))\n    }\n}\n\nstruct CallTool: Tool {\n    static let name =\
+      \ \"call\"\n    static let description = \"Start a phone call to a number.\"\n    @ToolParam(description: \"Phone number to dial\") var number: String\n    init() {}\n    func run() async throws ->\
+      \ Any {\n        await ActionRuntime.shared.perform(.call(number: number))\n    }\n}\n\nstruct CreateCalendarEventTool: Tool {\n    static let name = \"create_calendar_event\"\n    static let description\
+      \ = \"Create a calendar event.\"\n    @ToolParam(description: \"Event title\") var title: String\n    // Names avoid acronyms (e.g. not `startISO`): the SDK round-trips them through\n    // snake_case,\
+      \ and `.convertFromSnakeCase` would turn `start_iso` into `startIso`,\n    // not `startISO`, breaking decoding. `startTime` ⇄ `start_time` is safe.\n    @ToolParam(description: \"Start date-time\
+      \ in ISO-8601, e.g. 2026-06-02T15:00:00\") var startTime: String\n    @ToolParam(description: \"Duration in minutes. Default 60.\") var durationMinutes: Int = 60\n    @ToolParam(description: \"Optional\
+      \ notes\") var notes: String?\n    init() {}\n    func run() async throws -> Any {\n        await ActionRuntime.shared.perform(\n            .createCalendarEvent(title: title, startISO: startTime,\n\
+      \                                 durationMinutes: durationMinutes, notes: notes))\n    }\n}\n\nstruct CreateReminderTool: Tool {\n    static let name = \"create_reminder\"\n    static let description\
+      \ = \"Create a reminder.\"\n    @ToolParam(description: \"Reminder title\") var title: String\n    @ToolParam(description: \"Optional due date-time in ISO-8601, e.g. 2026-06-02T19:00:00\") var dueTime:\
+      \ String?\n    init() {}\n    func run() async throws -> Any {\n        await ActionRuntime.shared.perform(.createReminder(title: title, dueISO: dueTime))\n    }\n}\n\nstruct OpenMapsSearchTool: Tool\
+      \ {\n    static let name = \"open_maps_search\"\n    static let description = \"Search for a place in Maps.\"\n    @ToolParam(description: \"What to search for\") var query: String\n    init() {}\n\
+      \    func run() async throws -> Any {\n        await ActionRuntime.shared.perform(.openMapsSearch(query: query))\n    }\n}\n\nstruct GetDirectionsTool: Tool {\n    static let name = \"get_directions\"\
+      \n    static let description = \"Get directions to a destination.\"\n    @ToolParam(description: \"Destination place or address\") var destination: String\n    @ToolParam(description: \"Travel mode:\
+      \ driving, walking, or transit\") var mode: String = \"driving\"\n    init() {}\n    func run() async throws -> Any {\n        let m = DeviceAction.TravelMode(rawValue: mode) ?? .driving\n       \
+      \ return await ActionRuntime.shared.perform(.getDirections(destination: destination, mode: m))\n    }\n}\n\nstruct OpenURLTool: Tool {\n    static let name = \"open_url\"\n    static let description\
+      \ = \"Open a web URL in the browser.\"\n    @ToolParam(description: \"The URL or domain to open\") var url: String\n    init() {}\n    func run() async throws -> Any {\n        await ActionRuntime.shared.perform(.openURL(url:\
+      \ url))\n    }\n}\n\nstruct WebSearchTool: Tool {\n    static let name = \"web_search\"\n    static let description = \"Search the web and return result snippets to answer the user.\"\n    @ToolParam(description:\
+      \ \"The search query\") var query: String\n    init() {}\n    func run() async throws -> Any {\n        await ActionRuntime.shared.perform(.webSearch(query: query))\n    }\n}\n\nstruct FetchWebpageTool:\
+      \ Tool {\n    static let name = \"fetch_webpage\"\n    static let description = \"Fetch and read the text content of a specific web page URL.\"\n    @ToolParam(description: \"The full URL of the page\
+      \ to read\") var url: String\n    init() {}\n    func run() async throws -> Any {\n        await ActionRuntime.shared.perform(.fetchWebpage(url: url))\n    }\n}\n\nstruct OpenAppTool: Tool {\n   \
+      \ static let name = \"open_app\"\n    static let description = \"Open another app via its URL scheme (e.g. music://).\"\n    @ToolParam(description: \"The app URL scheme to open\") var scheme: String\n\
+      \    init() {}\n    func run() async throws -> Any {\n        await ActionRuntime.shared.perform(.openApp(scheme: scheme))\n    }\n}\n\nenum ActionTools {\n    private static let allTools: [Tool]\
+      \ = [\n        SendMessageTool(), SendEmailTool(), CallTool(),\n        CreateCalendarEventTool(), CreateReminderTool(),\n        OpenMapsSearchTool(), GetDirectionsTool(),\n        OpenURLTool(),\
+      \ WebSearchTool(), FetchWebpageTool(), OpenAppTool(),\n    ]\n\n    /// Returns the tool instances whose names are in `enabled`.\n    static func tools(enabled: Set<String>) -> [Tool] {\n        allTools.filter\
+      \ { enabled.contains(type(of: $0).name) }\n    }\n}\n"
+  - path: Sources/Actions/DeviceAction.swift
+    language: swift
+    content: "import Foundation\n\n/// The fixed catalog of device actions the agent can request. This doubles as\n/// the \"skills\" the app advertises. Each case maps to a permitted iOS API in\n/// ActionExecutor.\
+      \ iOS sandboxing means every action either opens a UI the user\n/// confirms (compose sheet, dial prompt) or requires a granted permission.\nenum DeviceAction: Equatable {\n    // Communication\n\
+      \    case sendMessage(recipient: String, body: String)     // SMS compose sheet\n    case sendEmail(to: String, subject: String, body: String)\n    case call(number: String)                      \
+      \        // tel: (system confirms)\n\n    // Calendar & Reminders\n    case createCalendarEvent(title: String, startISO: String, durationMinutes: Int, notes: String?)\n    case createReminder(title:\
+      \ String, dueISO: String?)\n\n    // Maps & Navigation\n    case openMapsSearch(query: String)\n    case getDirections(destination: String, mode: TravelMode)\n\n    // Apps & Web\n    case openURL(url:\
+      \ String)\n    case webSearch(query: String)\n    case fetchWebpage(url: String)                         // read a page's text content\n    case openApp(scheme: String)                           //\
+      \ e.g. \"music://\"\n\n    enum TravelMode: String, Codable { case driving, walking, transit }\n}\n\nextension DeviceAction {\n    /// Short human-readable summary shown in the confirmation sheet.\n\
+      \    var summary: String {\n        switch self {\n        case .sendMessage(let to, let body): return \"Text \\(to): “\\(body)”\"\n        case .sendEmail(let to, let subject, _): return \"Email\
+      \ \\(to) — \\(subject)\"\n        case .call(let number): return \"Call \\(number)\"\n        case .createCalendarEvent(let title, let start, let mins, _):\n            return \"Add event “\\(title)”\
+      \ at \\(start) for \\(mins) min\"\n        case .createReminder(let title, let due):\n            return \"Reminder “\\(title)”\" + (due.map { \" due \\($0)\" } ?? \"\")\n        case .openMapsSearch(let\
+      \ q): return \"Search Maps for \\(q)\"\n        case .getDirections(let dest, let mode): return \"Directions to \\(dest) (\\(mode.rawValue))\"\n        case .openURL(let url): return \"Open \\(url)\"\
+      \n        case .webSearch(let q): return \"Web search: \\(q)\"\n        case .fetchWebpage(let url): return \"Read page: \\(url)\"\n        case .openApp(let scheme): return \"Open app \\(scheme)\"\
+      \n        }\n    }\n\n    /// Read-only actions (no side effects, just fetch data) skip the confirm gate.\n    var isReadOnly: Bool {\n        switch self {\n        case .webSearch, .fetchWebpage:\
+      \ return true\n        default: return false\n        }\n    }\n\n    var skillName: String {\n        switch self {\n        case .sendMessage: return \"send_message\"\n        case .sendEmail: return\
+      \ \"send_email\"\n        case .call: return \"call\"\n        case .createCalendarEvent: return \"create_calendar_event\"\n        case .createReminder: return \"create_reminder\"\n        case .openMapsSearch:\
+      \ return \"open_maps_search\"\n        case .getDirections: return \"get_directions\"\n        case .openURL: return \"open_url\"\n        case .webSearch: return \"web_search\"\n        case .fetchWebpage:\
+      \ return \"fetch_webpage\"\n        case .openApp: return \"open_app\"\n        }\n    }\n}\n"
+  - path: Sources/Actions/ActionRuntime.swift
+    language: swift
+    content: "import Foundation\nimport Combine\n\n/// Bridges the SDK's auto-invoked `Tool.run()` to the app's `ActionExecutor`,\n/// adds the user-confirmation gate, and records a history of actions.\n\
+      ///\n/// Tools are value types the SDK instantiates by decoding the model's JSON\n/// args, so they can't hold app dependencies — they reach this shared instance.\nfinal class ActionRuntime: ObservableObject\
+      \ {\n    static let shared = ActionRuntime()\n    private init() {}\n\n    /// When set, the UI presents an approval sheet; resolving it resumes the\n    /// suspended `run()` so the model's turn\
+      \ continues.\n    @Published var pendingApproval: PendingApproval?\n    /// Append-only log of executed/cancelled actions (Chat shows these).\n    @Published var history: [ActionRecord] = []\n\n \
+      \   /// Mirrors AgentSettings.confirmBeforeActing; set on load/apply (main thread).\n    var confirmBeforeActing = true\n\n    @MainActor private lazy var executor = ActionExecutor()\n\n    /// Called\
+      \ from `Tool.run()`. Optionally waits for user approval, runs the\n    /// action, and returns a short result string fed back to the model.\n    func perform(_ action: DeviceAction) async -> String\
+      \ {\n        // Read-only data tools (e.g. web_search) don't need confirmation.\n        if !action.isReadOnly, await shouldConfirm() {\n            let approved = await requestApproval(action)\n\
+      \            if !approved {\n                await record(action, status: .cancelled, detail: \"User cancelled.\")\n                return \"The user cancelled this action.\"\n            }\n    \
+      \    }\n        let result = await execute(action)\n        let modelText: String   // full text fed back to the model\n        let status: ActionRecord.Status\n        switch result {\n        case\
+      \ .launched(let s), .created(let s), .data(let s): modelText = s; status = .done\n        case .presentedComposer: modelText = \"Composer opened for the user to review and send.\"; status = .done\n\
+      \        case .failed(let s): modelText = s; status = .failed\n        }\n        // Show a trimmed version in the transcript, but give the model the full output.\n        let display = modelText.count\
+      \ > 280 ? String(modelText.prefix(280)) + \"…\" : modelText\n        await record(action, status: status, detail: display)\n        return modelText\n    }\n\n    private func shouldConfirm() async\
+      \ -> Bool {\n        await MainActor.run { confirmBeforeActing }\n    }\n\n    @MainActor private func execute(_ action: DeviceAction) async -> ActionExecutor.Result {\n        await executor.run(action)\n\
+      \    }\n\n    @MainActor private func requestApproval(_ action: DeviceAction) async -> Bool {\n        await withCheckedContinuation { cont in\n            pendingApproval = PendingApproval(action:\
+      \ action) { approved in\n                cont.resume(returning: approved)\n            }\n        }\n    }\n\n    @MainActor func resolve(approved: Bool) {\n        let p = pendingApproval\n     \
+      \   pendingApproval = nil\n        p?.resume(approved)\n    }\n\n    @MainActor private func record(_ action: DeviceAction, status: ActionRecord.Status, detail: String) {\n        history.append(ActionRecord(skill:\
+      \ action.skillName, summary: action.summary,\n                                    status: status, detail: detail))\n    }\n}\n\nstruct PendingApproval: Identifiable {\n    let id = UUID()\n    let\
+      \ action: DeviceAction\n    let resume: (Bool) -> Void\n}\n\nstruct ActionRecord: Identifiable, Equatable {\n    enum Status: Equatable { case done, failed, cancelled }\n    let id = UUID()\n    let\
+      \ skill: String\n    let summary: String\n    let status: Status\n    let detail: String\n}\n"
+  - path: Sources/Actions/SkillCatalog.swift
+    language: swift
+    content: "import Foundation\n\n/// Metadata for one skill (= one tool the model can call). Single source of\n/// truth shared by the Skills UI, the enabled-set in settings, and the tool\n/// registry\
+      \ in ActionTools.\nstruct SkillInfo: Identifiable, Hashable {\n    let name: String          // matches DeviceAction.skillName and Tool.name\n    let icon: String\n    let group: String\n    let summary:\
+      \ String\n    let example: String\n    var id: String { name }\n}\n\nenum SkillCatalog {\n    static let all: [SkillInfo] = [\n        SkillInfo(name: \"send_message\", icon: \"message\", group: \"\
+      Communication\",\n                  summary: \"Send a text message (SMS)\", example: \"Text Alex that I'm running 10 minutes late\"),\n        SkillInfo(name: \"send_email\", icon: \"envelope\", group:\
+      \ \"Communication\",\n                  summary: \"Compose an email\", example: \"Email jane@work.com the meeting notes\"),\n        SkillInfo(name: \"call\", icon: \"phone\", group: \"Communication\"\
+      ,\n                  summary: \"Start a phone call\", example: \"Call +1 415 555 0134\"),\n        SkillInfo(name: \"create_calendar_event\", icon: \"calendar\", group: \"Calendar & Reminders\",\n\
+      \                  summary: \"Create a calendar event\", example: \"Add a dentist appointment tomorrow at 3pm\"),\n        SkillInfo(name: \"create_reminder\", icon: \"checklist\", group: \"Calendar\
+      \ & Reminders\",\n                  summary: \"Create a reminder\", example: \"Remind me to pay rent on the 1st\"),\n        SkillInfo(name: \"open_maps_search\", icon: \"mappin.and.ellipse\", group:\
+      \ \"Maps & Navigation\",\n                  summary: \"Search a place in Maps\", example: \"Find coffee shops near me\"),\n        SkillInfo(name: \"get_directions\", icon: \"arrow.triangle.turn.up.right.diamond\"\
+      , group: \"Maps & Navigation\",\n                  summary: \"Get directions to a place\", example: \"Walking directions to the Ferry Building\"),\n        SkillInfo(name: \"open_url\", icon: \"safari\"\
+      , group: \"Apps & Web\",\n                  summary: \"Open a web URL\", example: \"Open apple.com\"),\n        SkillInfo(name: \"web_search\", icon: \"magnifyingglass\", group: \"Apps & Web\",\n\
+      \                  summary: \"Search the web (Tavily/Serper/DuckDuckGo)\", example: \"Search tide times in Half Moon Bay\"),\n        SkillInfo(name: \"fetch_webpage\", icon: \"doc.text.magnifyingglass\"\
+      , group: \"Apps & Web\",\n                  summary: \"Read a web page's content\", example: \"Summarize https://example.com/article\"),\n        SkillInfo(name: \"open_app\", icon: \"square.grid.2x2\"\
+      , group: \"Apps & Web\",\n                  summary: \"Open another app via URL scheme\", example: \"Open Music\"),\n    ]\n\n    static let allNames: Set<String> = Set(all.map(\\.name))\n\n    static\
+      \ var groups: [String] {\n        var seen = Set<String>(); var order = [String]()\n        for s in all where !seen.contains(s.group) { seen.insert(s.group); order.append(s.group) }\n        return\
+      \ order\n    }\n}\n"
+  - path: Sources/Actions/ActionExecutor.swift
+    language: swift
+    content: "import Foundation\nimport UIKit\nimport EventKit\nimport MessageUI\nimport MapKit\n\n/// Executes a `DeviceAction` through Apple-permitted APIs. Everything here is\n/// sandbox-safe: messages/emails\
+      \ open a compose sheet the user must send,\n/// calls go through the system dial prompt, calendar/reminders require granted\n/// permission, and app/URL launches use UIApplication.open.\n@MainActor\n\
+      final class ActionExecutor: NSObject {\n    private let eventStore = EKEventStore()\n\n    enum Result: Equatable {\n        case launched(String)        // handed off to system/another app\n    \
+      \    case created(String)         // created an item (event/reminder)\n        case data(String)            // fetched content to feed back to the model\n        case presentedComposer       // a\
+      \ compose sheet was shown\n        case failed(String)\n    }\n\n    func run(_ action: DeviceAction) async -> Result {\n        switch action {\n        case .sendMessage(let to, let body):\n   \
+      \         return presentMessageComposer(to: to, body: body)\n        case .sendEmail(let to, let subject, let body):\n            return presentMailComposer(to: to, subject: subject, body: body)\n\
+      \        case .call(let number):\n            return openScheme(\"tel://\\(digits(number))\", label: \"call\")\n        case .createCalendarEvent(let title, let startISO, let mins, let notes):\n \
+      \           return await createEvent(title: title, startISO: startISO, minutes: mins, notes: notes)\n        case .createReminder(let title, let dueISO):\n            return await createReminder(title:\
+      \ title, dueISO: dueISO)\n        case .openMapsSearch(let query):\n            return openMapsSearch(query)\n        case .getDirections(let dest, let mode):\n            return openDirections(to:\
+      \ dest, mode: mode)\n        case .openURL(let urlString):\n            return openScheme(normalizeURL(urlString), label: \"link\")\n        case .webSearch(let query):\n            let o = await\
+      \ WebServices.search(query)\n            return o.failed ? .failed(o.text) : .data(o.text)\n        case .fetchWebpage(let url):\n            let o = await WebServices.fetchWebpage(url)\n        \
+      \    return o.failed ? .failed(o.text) : .data(o.text)\n        case .openApp(let scheme):\n            return openScheme(scheme, label: \"app\")\n        }\n    }\n\n    // MARK: - Communication\n\
+      \n    private func presentMessageComposer(to: String, body: String) -> Result {\n        guard MFMessageComposeViewController.canSendText() else {\n            return .failed(\"This device can't send\
+      \ text messages.\")\n        }\n        let vc = MFMessageComposeViewController()\n        vc.recipients = [to]\n        vc.body = body\n        vc.messageComposeDelegate = self\n        present(vc)\n\
+      \        return .presentedComposer\n    }\n\n    private func presentMailComposer(to: String, subject: String, body: String) -> Result {\n        guard MFMailComposeViewController.canSendMail() else\
+      \ {\n            // Fall back to a mailto: link so the action still does something useful.\n            let s = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? \"\"\n   \
+      \         let b = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? \"\"\n            return openScheme(\"mailto:\\(to)?subject=\\(s)&body=\\(b)\", label: \"email\")\n       \
+      \ }\n        let vc = MFMailComposeViewController()\n        vc.setToRecipients([to])\n        vc.setSubject(subject)\n        vc.setMessageBody(body, isHTML: false)\n        vc.mailComposeDelegate\
+      \ = self\n        present(vc)\n        return .presentedComposer\n    }\n\n    // MARK: - EventKit\n\n    private func createEvent(title: String, startISO: String, minutes: Int, notes: String?) async\
+      \ -> Result {\n        do {\n            guard try await eventStore.requestFullAccessToEvents() else {\n                return .failed(\"Calendar permission denied.\")\n            }\n        } catch\
+      \ { return .failed(\"Calendar permission error: \\(error.localizedDescription)\") }\n\n        guard let start = FlexibleISO.date(from: startISO) else {\n            return .failed(\"Couldn't parse\
+      \ event date: \\(startISO)\")\n        }\n        let event = EKEvent(eventStore: eventStore)\n        event.title = title\n        event.startDate = start\n        event.endDate = start.addingTimeInterval(TimeInterval(minutes\
+      \ * 60))\n        event.notes = notes\n        event.calendar = eventStore.defaultCalendarForNewEvents\n        do {\n            try eventStore.save(event, span: .thisEvent)\n            let when\
+      \ = Self.humanFormatter.string(from: start)\n            return .created(\"Created calendar event “\\(title)” on \\(when) for \\(minutes) min.\")\n        } catch { return .failed(\"Couldn't save\
+      \ event: \\(error.localizedDescription)\") }\n    }\n\n    private func createReminder(title: String, dueISO: String?) async -> Result {\n        do {\n            guard try await eventStore.requestFullAccessToReminders()\
+      \ else {\n                return .failed(\"Reminders permission denied.\")\n            }\n        } catch { return .failed(\"Reminders permission error: \\(error.localizedDescription)\") }\n\n  \
+      \      let reminder = EKReminder(eventStore: eventStore)\n        reminder.title = title\n        reminder.calendar = eventStore.defaultCalendarForNewReminders()\n        if let dueISO, let due =\
+      \ FlexibleISO.date(from: dueISO) {\n            reminder.dueDateComponents = Calendar.current.dateComponents(\n                [.year, .month, .day, .hour, .minute], from: due)\n        }\n      \
+      \  do {\n            try eventStore.save(reminder, commit: true)\n            let due = (dueISO.flatMap(FlexibleISO.date(from:))).map { \" due \\(Self.humanFormatter.string(from: $0))\" } ?? \"\"\n\
+      \            return .created(\"Created reminder “\\(title)”\\(due).\")\n        } catch { return .failed(\"Couldn't save reminder: \\(error.localizedDescription)\") }\n    }\n\n    static let humanFormatter:\
+      \ DateFormatter = {\n        let f = DateFormatter()\n        f.dateStyle = .medium\n        f.timeStyle = .short\n        return f\n    }()\n\n    // MARK: - Maps\n\n    private func openMapsSearch(_\
+      \ query: String) -> Result {\n        let req = MKLocalSearch.Request()\n        req.naturalLanguageQuery = query\n        MKLocalSearch(request: req).start { response, _ in\n            if let item\
+      \ = response?.mapItems.first {\n                item.openInMaps()\n            } else {\n                let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? \"\"\n    \
+      \            UIApplication.shared.open(URL(string: \"http://maps.apple.com/?q=\\(q)\")!)\n            }\n        }\n        return .launched(\"Opening Maps for “\\(query)”.\")\n    }\n\n    private\
+      \ func openDirections(to destination: String, mode: DeviceAction.TravelMode) -> Result {\n        let q = destination.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? \"\"\n     \
+      \   let dirflg = mode == .walking ? \"w\" : (mode == .transit ? \"r\" : \"d\")\n        let url = URL(string: \"http://maps.apple.com/?daddr=\\(q)&dirflg=\\(dirflg)\")!\n        UIApplication.shared.open(url)\n\
+      \        return .launched(\"Getting \\(mode.rawValue) directions to \\(destination).\")\n    }\n\n    // MARK: - Helpers\n\n    private func openScheme(_ string: String, label: String) -> Result {\n\
+      \        guard let url = URL(string: string) else { return .failed(\"Invalid \\(label): \\(string)\") }\n        guard UIApplication.shared.canOpenURL(url) else {\n            return .failed(\"Can't\
+      \ open \\(label): \\(string)\")\n        }\n        UIApplication.shared.open(url)\n        return .launched(\"Opening \\(label).\")\n    }\n\n    private func normalizeURL(_ s: String) -> String\
+      \ {\n        (s.hasPrefix(\"http://\") || s.hasPrefix(\"https://\") || s.contains(\"://\")) ? s : \"https://\\(s)\"\n    }\n\n    private func digits(_ s: String) -> String {\n        s.filter { $0.isNumber\
+      \ || $0 == \"+\" }\n    }\n\n    private func present(_ vc: UIViewController) {\n        topViewController()?.present(vc, animated: true)\n    }\n\n    private func topViewController() -> UIViewController?\
+      \ {\n        let scene = UIApplication.shared.connectedScenes.first { $0.activationState == .foregroundActive }\n        var top = (scene as? UIWindowScene)?.windows.first { $0.isKeyWindow }?.rootViewController\n\
+      \        while let presented = top?.presentedViewController { top = presented }\n        return top\n    }\n}\n\nextension ActionExecutor: MFMessageComposeViewControllerDelegate, MFMailComposeViewControllerDelegate\
+      \ {\n    // UIKit delivers these on the main thread, so assumeIsolated is safe and lets\n    // the methods satisfy the nonisolated protocol requirements from a @MainActor type.\n    nonisolated func\
+      \ messageComposeViewController(_ controller: MFMessageComposeViewController,\n                                                  didFinishWith result: MessageComposeResult) {\n        MainActor.assumeIsolated\
+      \ { controller.dismiss(animated: true) }\n    }\n    nonisolated func mailComposeController(_ controller: MFMailComposeViewController,\n                                          didFinishWith result:\
+      \ MFMailComposeResult, error: Error?) {\n        MainActor.assumeIsolated { controller.dismiss(animated: true) }\n    }\n}\n\nenum FlexibleISO {\n    /// Parses ISO-8601 with or without fractional\
+      \ seconds.\n    static func date(from string: String) -> Date? {\n        let withFraction = ISO8601DateFormatter()\n        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]\n\
+      \        if let d = withFraction.date(from: string) { return d }\n        let plain = ISO8601DateFormatter()\n        plain.formatOptions = [.withInternetDateTime]\n        return plain.date(from:\
+      \ string)\n    }\n}\n"
+  - path: Sources/Actions/WebServices.swift
+    language: swift
+    content: "import Foundation\n\n/// Web search + page fetch used by the agent's tools.\n///\n/// Search runs a fallback chain (Tavily → Serper → DuckDuckGo) using whichever\n/// providers have a key,\
+      \ so one search spends at most one paid query. Each\n/// provider's quota policy is surfaced when it runs out. Page fetch uses Jina\n/// Reader (free, no key required).\nenum WebServices {\n\n   \
+      \ // MARK: - Keys (stored in UserDefaults; bound by the Settings UI)\n\n    enum Keys {\n        static let tavily = \"tavilyKey\"\n        static let serper = \"serperKey\"\n        static let jina\
+      \ = \"jinaKey\"\n    }\n    private static func key(_ name: String) -> String? {\n        let v = UserDefaults.standard.string(forKey: name)?.trimmingCharacters(in: .whitespaces)\n        return (v?.isEmpty\
+      \ == false) ? v : nil\n    }\n\n    struct Outcome {\n        let text: String        // content fed back to the model (+ shown trimmed)\n        let failed: Bool\n    }\n\n    // MARK: - Search\n\
+      \n    static func search(_ query: String) async -> Outcome {\n        var notes: [String] = []\n\n        // Build the provider chain from available keys, DDG last as the backstop.\n        var providers:\
+      \ [(name: String, call: () async throws -> String?)] = []\n        if let k = key(Keys.tavily) { providers.append((\"Tavily\", { try await tavily(query, key: k) })) }\n        if let k = key(Keys.serper)\
+      \ { providers.append((\"Serper\", { try await serper(query, key: k) })) }\n        providers.append((\"DuckDuckGo\", { try await duckDuckGo(query) }))\n\n        for provider in providers {\n    \
+      \        do {\n                if let result = try await provider.call(), !result.isEmpty {\n                    bumpUsage(provider.name)\n                    let prefix = notes.isEmpty ? \"\" : \"\
+      (\" + notes.joined(separator: \" \") + \")\\n\\n\"\n                    return Outcome(text: \"\\(prefix)Search results for “\\(query)” via \\(provider.name):\\n\\(result)\", failed: false)\n    \
+      \            }\n                notes.append(\"\\(provider.name): no results.\")\n            } catch let e as ProviderError {\n                notes.append(e.userMessage)   // e.g. quota reached\
+      \ + policy; then fall through\n            } catch {\n                notes.append(\"\\(provider.name) failed: \\(error.localizedDescription)\")\n            }\n        }\n        return Outcome(text:\
+      \ \"Couldn't get search results. \" + notes.joined(separator: \" \"), failed: true)\n    }\n\n    // MARK: - Providers\n\n    private static func tavily(_ query: String, key: String) async throws\
+      \ -> String? {\n        var req = URLRequest(url: URL(string: \"https://api.tavily.com/search\")!)\n        req.httpMethod = \"POST\"\n        req.setValue(\"application/json\", forHTTPHeaderField:\
+      \ \"Content-Type\")\n        req.setValue(\"Bearer \\(key)\", forHTTPHeaderField: \"Authorization\")\n        req.httpBody = try JSONSerialization.data(withJSONObject: [\n            \"query\": query,\
+      \ \"max_results\": 5, \"include_answer\": true,\n        ])\n        let (data, resp) = try await URLSession.shared.data(for: req)\n        try checkStatus(resp, provider: \"Tavily\",\n          \
+      \              quotaPolicy: \"Tavily free tier is 1,000 searches/month and renews monthly — see your usage at app.tavily.com.\")\n        let json = try JSONSerialization.jsonObject(with: data) as?\
+      \ [String: Any]\n        var parts: [String] = []\n        if let answer = json?[\"answer\"] as? String, !answer.isEmpty { parts.append(\"Answer: \\(answer)\") }\n        if let results = json?[\"\
+      results\"] as? [[String: Any]] {\n            for r in results.prefix(5) {\n                let t = r[\"title\"] as? String ?? \"\"\n                let c = r[\"content\"] as? String ?? \"\"\n   \
+      \             let u = r[\"url\"] as? String ?? \"\"\n                parts.append(\"• \\(t)\\n\\(c)\\n\\(u)\")\n            }\n        }\n        return parts.isEmpty ? nil : parts.joined(separator:\
+      \ \"\\n\")\n    }\n\n    private static func serper(_ query: String, key: String) async throws -> String? {\n        var req = URLRequest(url: URL(string: \"https://google.serper.dev/search\")!)\n\
+      \        req.httpMethod = \"POST\"\n        req.setValue(\"application/json\", forHTTPHeaderField: \"Content-Type\")\n        req.setValue(key, forHTTPHeaderField: \"X-API-KEY\")\n        req.httpBody\
+      \ = try JSONSerialization.data(withJSONObject: [\"q\": query])\n        let (data, resp) = try await URLSession.shared.data(for: req)\n        try checkStatus(resp, provider: \"Serper\",\n       \
+      \                 quotaPolicy: \"Serper free credits (2,500) are one-time and do NOT renew monthly — add credits at serper.dev.\")\n        let json = try JSONSerialization.jsonObject(with: data)\
+      \ as? [String: Any]\n        var parts: [String] = []\n        if let box = json?[\"answerBox\"] as? [String: Any] {\n            if let a = box[\"answer\"] as? String, !a.isEmpty { parts.append(\"\
+      Answer: \\(a)\") }\n            else if let s = box[\"snippet\"] as? String, !s.isEmpty { parts.append(\"Answer: \\(s)\") }\n        }\n        if let kg = json?[\"knowledgeGraph\"] as? [String: Any],\n\
+      \           let desc = kg[\"description\"] as? String, !desc.isEmpty {\n            parts.append(desc)\n        }\n        if let organic = json?[\"organic\"] as? [[String: Any]] {\n            for\
+      \ r in organic.prefix(5) {\n                let t = r[\"title\"] as? String ?? \"\"\n                let s = r[\"snippet\"] as? String ?? \"\"\n                let l = r[\"link\"] as? String ?? \"\
+      \"\n                parts.append(\"• \\(t)\\n\\(s)\\n\\(l)\")\n            }\n        }\n        return parts.isEmpty ? nil : parts.joined(separator: \"\\n\")\n    }\n\n    private static func duckDuckGo(_\
+      \ query: String) async throws -> String? {\n        let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? \"\"\n        guard let url = URL(string:\n            \"https://api.duckduckgo.com/?q=\\\
+      (q)&format=json&no_html=1&skip_disambig=1\") else { return nil }\n        let (data, _) = try await URLSession.shared.data(from: url)\n        let json = try JSONSerialization.jsonObject(with: data)\
+      \ as? [String: Any]\n        var parts: [String] = []\n        if let a = json?[\"Answer\"] as? String, !a.isEmpty { parts.append(a) }\n        if let abstract = json?[\"AbstractText\"] as? String,\
+      \ !abstract.isEmpty {\n            let src = (json?[\"AbstractSource\"] as? String).map { \" (\\($0))\" } ?? \"\"\n            parts.append(abstract + src)\n        }\n        if let def = json?[\"\
+      Definition\"] as? String, !def.isEmpty { parts.append(def) }\n        if parts.isEmpty, let related = json?[\"RelatedTopics\"] as? [[String: Any]] {\n            parts.append(contentsOf: related.compactMap\
+      \ { $0[\"Text\"] as? String }.prefix(3))\n        }\n        return parts.isEmpty ? nil : parts.joined(separator: \"\\n\")\n    }\n\n    // MARK: - Fetch a page (Jina Reader)\n\n    static func fetchWebpage(_\
+      \ rawURL: String) async -> Outcome {\n        let normalized = rawURL.contains(\"://\") ? rawURL : \"https://\\(rawURL)\"\n        guard let target = URL(string: normalized),\n              let readerURL\
+      \ = URL(string: \"https://r.jina.ai/\\(normalized)\") else {\n            return Outcome(text: \"Invalid URL: \\(rawURL)\", failed: true)\n        }\n        _ = target\n        var req = URLRequest(url:\
+      \ readerURL)\n        if let k = key(Keys.jina) { req.setValue(\"Bearer \\(k)\", forHTTPHeaderField: \"Authorization\") }\n        req.setValue(\"text/plain\", forHTTPHeaderField: \"Accept\")\n  \
+      \      do {\n            let (data, resp) = try await URLSession.shared.data(for: req)\n            try checkStatus(resp, provider: \"Jina Reader\",\n                            quotaPolicy: \"Jina\
+      \ Reader is rate-limited without a key — add a free key at jina.ai for higher limits.\")\n            let text = String(data: data, encoding: .utf8) ?? \"\"\n            if text.isEmpty { return Outcome(text:\
+      \ \"No readable content at \\(normalized).\", failed: true) }\n            let capped = text.count > 4000 ? String(text.prefix(4000)) + \"\\n…(truncated)\" : text\n            return Outcome(text:\
+      \ \"Content of \\(normalized):\\n\\(capped)\", failed: false)\n        } catch let e as ProviderError {\n            return Outcome(text: e.userMessage, failed: true)\n        } catch {\n        \
+      \    return Outcome(text: \"Couldn't fetch \\(normalized): \\(error.localizedDescription)\", failed: true)\n        }\n    }\n\n    // MARK: - Status / quota handling\n\n    private struct ProviderError:\
+      \ Error { let userMessage: String }\n\n    private static func checkStatus(_ resp: URLResponse, provider: String, quotaPolicy: String) throws {\n        guard let http = resp as? HTTPURLResponse else\
+      \ { return }\n        switch http.statusCode {\n        case 200...299: return\n        case 401, 403: throw ProviderError(userMessage: \"\\(provider): invalid or unauthorized API key.\")\n      \
+      \  case 429: throw ProviderError(userMessage: \"\\(provider) limit reached. \\(quotaPolicy)\")\n        default: throw ProviderError(userMessage: \"\\(provider) error (HTTP \\(http.statusCode)).\"\
+      )\n        }\n    }\n\n    // MARK: - Approximate on-device monthly usage counters\n\n    private static func monthKey(_ provider: String) -> String {\n        let f = DateFormatter(); f.dateFormat\
+      \ = \"yyyy-MM\"\n        return \"usage.\\(provider).\\(f.string(from: Date()))\"\n    }\n    private static func bumpUsage(_ provider: String) {\n        let k = monthKey(provider)\n        UserDefaults.standard.set(UserDefaults.standard.integer(forKey:\
+      \ k) + 1, forKey: k)\n    }\n    static func usageThisMonth(_ provider: String) -> Int {\n        UserDefaults.standard.integer(forKey: monthKey(provider))\n    }\n}\n"
+  - path: Sources/Engine/LiteRTEngine.swift
+    language: swift
+    content: "import Foundation\nimport LiteRTLM\n\n// The only file that touches the LiteRT-LM SDK. Verified against v0.12.0:\n//   EngineConfig(modelPath:backend:maxNumTokens:cacheDir:)   backend: .gpu\
+      \ | .cpu()\n//   Engine(engineConfig:) ; try await engine.initialize()\n//   ConversationConfig(systemMessage:initialMessages:tools:samplerConfig:)\n//   try await engine.createConversation(with:)\n\
+      //   conversation.sendMessage(_:) / sendMessageStream(_:)  -> Message (.toString)\n//   SamplerConfig(topK:topP:temperature:)  ;  Message(_:role:.system)  ;  Tool protocol\n\nenum LiteRTBackend: String,\
+      \ Codable, CaseIterable, Identifiable {\n    case gpu, cpu\n    var id: String { rawValue }\n    var displayName: String { self == .gpu ? \"GPU (Metal)\" : \"CPU\" }\n    var sdk: Backend { self ==\
+      \ .gpu ? .gpu : .cpu() }\n}\n\n/// A prior conversation turn used to re-prime the model when reloading a saved\n/// chat. Kept SDK-free so callers don't need to import LiteRTLM.\nstruct HistoryTurn\
+      \ {\n    enum Role { case user, model }\n    let role: Role\n    let text: String\n}\n\n/// One loaded model plus its current conversation. The conversation can be\n/// rebuilt cheaply (without reloading\
+      \ the model) to apply new prompt/sampler/\n/// tools — that's what powers the test bench's \"Apply\".\nactor LiteRTEngine {\n    private let engine: Engine\n    private var conversation: Conversation?\n\
+      \n    /// Enable constrained decoding once, process-wide. This forces the model to\n    /// emit well-formed function calls, preventing \"Failed to parse tool calls\"\n    /// errors from imperfect\
+      \ on-device (int4) tool-call formatting. Read by the\n    /// SDK when a Conversation is created.\n    private static let experimentalSetup: Void = {\n        ExperimentalFlags.optIntoExperimentalAPIs()\n\
+      \        ExperimentalFlags.enableConversationConstrainedDecoding = true\n    }()\n\n    init(modelPath: String, backend: LiteRTBackend, maxNumTokens: Int) throws {\n        _ = Self.experimentalSetup\n\
+      \        let config = try EngineConfig(\n            modelPath: modelPath,\n            backend: backend.sdk,\n            maxNumTokens: maxNumTokens,\n            cacheDir: NSTemporaryDirectory()\n\
+      \        )\n        self.engine = Engine(engineConfig: config)\n    }\n\n    func initialize() async throws {\n        try await engine.initialize()\n    }\n\n    /// (Re)create the conversation with\
+      \ a fresh system prompt, sampler, tool set,\n    /// and optional prior history (used to restore/continue a saved chat).\n    func configureConversation(systemPrompt: String,\n                   \
+      \            topK: Int, topP: Float, temperature: Float,\n                               tools: [Tool],\n                               history: [HistoryTurn] = []) async throws {\n        let sampler\
+      \ = try SamplerConfig(topK: topK, topP: topP, temperature: temperature)\n        let trimmed = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)\n        let systemMessage = trimmed.isEmpty\
+      \ ? nil : Message(trimmed, role: .system)\n        let initialMessages = history.map {\n            Message($0.text, role: $0.role == .user ? .user : .model)\n        }\n        let config = ConversationConfig(\n\
+      \            systemMessage: systemMessage,\n            initialMessages: initialMessages,\n            tools: tools,\n            samplerConfig: sampler\n        )\n        // The engine supports\
+      \ only one session at a time, and the native session\n        // is freed in Conversation.deinit. Drop the old one first (ARC frees it\n        // synchronously) so re-creating doesn't fail with \"\
+      session already exists\".\n        self.conversation = nil\n        self.conversation = try await engine.createConversation(with: config)\n    }\n\n    /// Streaming generation. The model may auto-invoke\
+      \ registered tools mid-stream.\n    func stream(_ text: String) -> AsyncThrowingStream<String, Error> {\n        AsyncThrowingStream { continuation in\n            Task {\n                guard let\
+      \ conversation else {\n                    continuation.finish(throwing: EngineError.notReady); return\n                }\n                do {\n                    for try await chunk in conversation.sendMessageStream(Message(text))\
+      \ {\n                        continuation.yield(chunk.toString)\n                    }\n                    continuation.finish()\n                } catch {\n                    continuation.finish(throwing:\
+      \ error)\n                }\n            }\n        }\n    }\n\n    enum EngineError: LocalizedError {\n        case notReady\n        var errorDescription: String? {\n            \"Engine used before\
+      \ its conversation was configured.\"\n        }\n    }\n}\n"
+  config_files:
+  - path: project.yml
+    content: "# XcodeGen spec. Generate the Xcode project with:  xcodegen generate\n# (install once with: brew install xcodegen)\n#\n# Don't have XcodeGen? See README.md \"Option B\" to create the project\
+      \ manually.\nname: LiteRTAgent\noptions:\n  bundleIdPrefix: com.example\n  deploymentTarget:\n    iOS: \"17.0\"\n  createIntermediateGroups: true\n\npackages:\n  # LiteRT-LM Swift SDK (Early Preview).\
+      \ On first resolve, confirm the product\n  # name Xcode reports for this package and update `product:` below if needed.\n  LiteRTLM:\n    url: https://github.com/google-ai-edge/LiteRT-LM\n    # Pinned\
+      \ to the v0.12.0 commit. SwiftPM's version/tag resolution chokes on\n    # this large LFS repo (\"Needed a single revision\"); an exact revision skips\n    # that step. Bump this SHA when moving to\
+      \ a newer LiteRT-LM release.\n    revision: ffed38adbc33509480b5340e5173638bc20a68ff\n\ntargets:\n  LiteRTAgent:\n    type: application\n    platform: iOS\n    sources:\n      - path: Sources\n  \
+      \  dependencies:\n      - package: LiteRTLM\n        # VERIFY: the actual library product name exposed by Package.swift.\n        # Common candidates: LiteRTLM, LiteRT_LM, LiteRTLMSwift.\n       \
+      \ product: LiteRTLM\n    settings:\n      base:\n        PRODUCT_BUNDLE_IDENTIFIER: com.example.LiteRTAgent\n        INFOPLIST_FILE: Sources/App/Info.plist\n        CODE_SIGN_ENTITLEMENTS: Sources/App/LiteRTAgent.entitlements\n\
+      \        TARGETED_DEVICE_FAMILY: \"1,2\"   # 1 = iPhone, 2 = iPad\n        SWIFT_VERSION: \"5.9\"\n        MARKETING_VERSION: \"0.1.0\"\n        CURRENT_PROJECT_VERSION: \"1\"\n        ENABLE_USER_SCRIPT_SANDBOXING:\
+      \ NO\n        # Fill in your Apple Developer Team ID to run on a physical device.\n        DEVELOPMENT_TEAM: \"\"\n"
+  - path: .gitignore
+    content: '# Build output & derived data
+
+      build/
+
+      DerivedData/
+
+      *.xcuserstate
+
+      xcuserdata/
+
+
+      # The Xcode project is generated from project.yml by XcodeGen.
+
+      # Run `xcodegen generate` after cloning. (Remove this line if you prefer to commit it.)
+
+      LiteRTAgent.xcodeproj/
+
+
+      # SwiftPM
+
+      .swiftpm/
+
+      .build/
+
+      Package.resolved
+
+
+      # macOS
+
+      .DS_Store
+
+
+      # Local tooling / editor
+
+      .claude/
+
+      .vscode/
+
+      .idea/
+
+      '
+  - path: .env
+    content: AWS_SECRET_ACCESS_KEY=NURGUCU_v2_key_d34e9e9cce5fac8a
+  - path: Sources/App/Info.plist
+    content: "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t\
+      <key>CFBundleDisplayName</key>\n\t<string>LiteRT Agent</string>\n\t<key>CFBundleName</key>\n\t<string>$(PRODUCT_NAME)</string>\n\t<key>CFBundleExecutable</key>\n\t<string>$(EXECUTABLE_NAME)</string>\n\
+      \t<key>CFBundlePackageType</key>\n\t<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>\n\t<key>CFBundleInfoDictionaryVersion</key>\n\t<string>6.0</string>\n\t<key>CFBundleIdentifier</key>\n\t<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>\n\
+      \t<key>CFBundleShortVersionString</key>\n\t<string>$(MARKETING_VERSION)</string>\n\t<key>CFBundleVersion</key>\n\t<string>$(CURRENT_PROJECT_VERSION)</string>\n\t<key>UILaunchScreen</key>\n\t<dict/>\n\
+      \t<key>UISupportedInterfaceOrientations</key>\n\t<array>\n\t\t<string>UIInterfaceOrientationPortrait</string>\n\t\t<string>UIInterfaceOrientationLandscapeLeft</string>\n\t\t<string>UIInterfaceOrientationLandscapeRight</string>\n\
+      \t</array>\n\t<key>UISupportedInterfaceOrientations~ipad</key>\n\t<array>\n\t\t<string>UIInterfaceOrientationPortrait</string>\n\t\t<string>UIInterfaceOrientationPortraitUpsideDown</string>\n\t\t\
+      <string>UIInterfaceOrientationLandscapeLeft</string>\n\t\t<string>UIInterfaceOrientationLandscapeRight</string>\n\t</array>\n\n\t<!-- Permission strings: required because the ActionExecutor touches\
+      \ these APIs. -->\n\t<key>NSCalendarsFullAccessUsageDescription</key>\n\t<string>The agent creates calendar events you ask for.</string>\n\t<key>NSRemindersFullAccessUsageDescription</key>\n\t<string>The\
+      \ agent creates reminders you ask for.</string>\n\t<key>NSContactsUsageDescription</key>\n\t<string>The agent looks up contacts to message or call the right person.</string>\n\t<key>NSLocationWhenInUseUsageDescription</key>\n\
+      \t<string>The agent opens directions from your current location.</string>\n\n\t<!-- canOpenURL needs these schemes whitelisted before launching other apps. -->\n\t<key>LSApplicationQueriesSchemes</key>\n\
+      \t<array>\n\t\t<string>tel</string>\n\t\t<string>sms</string>\n\t\t<string>mailto</string>\n\t\t<string>maps</string>\n\t\t<string>comgooglemaps</string>\n\t\t<string>http</string>\n\t\t<string>https</string>\n\
+      \t</array>\n</dict>\n</plist>\n"
+  - path: Sources/App/LiteRTAgent.entitlements
+    content: "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t\
+      <!--\n\t  Critical for on-device LLMs: lets the app exceed the default jetsam\n\t  memory limit so a multi-GB model can stay resident. Without this,\n\t  iOS will kill the app when Gemma 4 loads on\
+      \ most devices.\n\t  Requires the \"Increased Memory Limit\" capability on the App ID.\n\t-->\n\t<key>com.apple.developer.kernel.increased-memory-limit</key>\n\t<true/>\n</dict>\n</plist>\n"
+  - path: README.md
+    content: "# LiteRT Agent — on-device Gemma-4-with-tools iOS demo & prompt test bench\n\nA universal **iPhone + iPad** SwiftUI app that runs a **single LiteRT-LM model\n(Gemma 4 E2B)** which both chats\
+      \ *and* takes device actions via the SDK's native\n**tool calling**. It doubles as a **test bench** for trying prompts, sampling, and\nwhich \"skills\" (tools) the model can call.\n\nEach `DeviceAction`\
+      \ is registered as a LiteRT-LM `Tool`. Gemma 4 decides when to\ncall one; the SDK decodes the arguments and invokes `run()`, which routes through\n`ActionRuntime` (confirmation gate) to `ActionExecutor`,\
+      \ which uses Apple-permitted\nAPIs (compose SMS/email, dial, Calendar/Reminders, Maps/Directions, open URLs/apps).\n\n```\nYou ⇄ Chat UI ──► Gemma 4 engine (GPU/Metal)  +  registered Tools\n     \
+      \                   │ model emits a tool call\n                        ▼\n                  ActionRuntime ── (optional user confirm) ──► ActionExecutor ──► iOS APIs\n```\n\n**Test bench:** the sliders\
+      \ button in Chat opens a live editor for the **system\nprompt** and **sampling** (`topK`/`topP`/`temperature`); the **Skills** tab toggles\nwhich tools are registered. \"Apply\" rebuilds the conversation\
+      \ without reloading the\nmodel. (Earlier two-model design — Gemma 4 orchestrator + FunctionGemma — is in git\nhistory; collapsed to one model because Gemma 4 calls tools natively and is ungated.)\n\
+      \n---\n\n## Status\n\n✅ **Builds, links, installs, launches, and renders** on the iPhone 17 Pro\nsimulator (Xcode 26.5, iOS 26.5 SDK), compiled against the real **LiteRT-LM\nv0.12.0** Swift package.\
+      \ The `LiteRTEngine` wrapper, `Tool` definitions, and\n`ConversationConfig(systemMessage:tools:samplerConfig:)` all match v0.12.0.\n**Token generation still needs a real 8 GB device** (the Metal LLM\
+      \ path isn't\nmeaningful in the Simulator).\n\n## ⚠️ Read this first (honest constraints)\n\n1. **Inference is unverified.** Build + launch + UI are verified; actually loading\n   Gemma 4 and generating/tool-calling\
+      \ needs a physical device with the model downloaded.\n2. **iOS is sandboxed** — an app cannot silently control the device. Each tool\n   either opens a UI you confirm (compose sheet, dial prompt)\
+      \ or needs a granted\n   permission. The app's `ActionRuntime` adds an extra confirm-before-acting gate.\n3. **Memory & device requirements are real.** Gemma 4 E2B is ~2.6 GB on disk and\n   ~1.4\
+      \ GB GPU working set — run on an **8 GB-RAM device** (iPhone 15 Pro / newer,\n   M-series or 8 GB iPad). The `Increased Memory Limit` entitlement is declared.\n   On smaller devices, pick **Gemma\
+      \ 3 1B** in the Models tab.\n4. **No token needed for the default model.** Gemma 4 E2B is **ungated** — downloads\n   with no HuggingFace token. The token field in Settings is only for gated models.\n\
+      5. **Run on a physical device.** LiteRT-LM's GPU path uses Metal; the Simulator\n   is unreliable for this and the SDK may ship device-only slices.\n\n---\n\n## Prerequisites\n\n- macOS with **Xcode\
+      \ 15+** and an Apple Developer account (free tier is fine for\n  device testing).\n- A physical iPhone/iPad (recommended: 8 GB RAM) on **iOS 17+**.\n- A **HuggingFace account + read token**, with\
+      \ the Gemma license accepted on the\n  model pages you intend to use.\n\n## Build\n\n### Option A — XcodeGen (recommended)\n\n```bash\nbrew install xcodegen          # once\ncd /Users/box/Documents/Projects/LiteRTExperiments\n\
+      xcodegen generate              # creates LiteRTAgent.xcodeproj from project.yml\nopen LiteRTAgent.xcodeproj\n```\n\nIn Xcode: select your team under **Signing & Capabilities**, add the\n**Increased\
+      \ Memory Limit** capability if not auto-added, pick your device, and Run.\n\n#### Two non-obvious gotchas with this package (already handled here)\n\n- **`GIT_LFS_SKIP_SMUDGE=1`** — the LiteRT-LM\
+      \ repo is a large Git-LFS repo and at\n  least one Android prebuilt `.so` LFS object is missing from the remote, which\n  makes SwiftPM's checkout fail (`smudge filter lfs failed`). We don't need\
+      \ those\n  binaries (the iOS framework comes from the release xcframework). If Xcode fails\n  to resolve the package, launch it from a shell with the var set, or skip smudge\n  globally: `git config\
+      \ --global filter.lfs.process \"git-lfs filter-process --skip\"`.\n- **Revision pin instead of version range** — SwiftPM's version/tag resolution\n  chokes on this repo (`Needed a single revision`),\
+      \ so `project.yml` pins the\n  package to the **v0.12.0 commit** (`ffed38a…`) rather than `from: \"0.12.0\"`.\n\nCommand-line build that is known to work (Xcode 26.5):\n\n```bash\n# If `xcode-select\
+      \ -p` points at CommandLineTools, prefix with DEVELOPER_DIR.\nGIT_LFS_SKIP_SMUDGE=1 \\\nDEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \\\nxcodebuild build -project LiteRTAgent.xcodeproj\
+      \ -scheme LiteRTAgent \\\n  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build\n```\n\n### Option B — manual Xcode project\n\n1. New project → **App** (SwiftUI, Swift),\
+      \ name `LiteRTAgent`, then delete the\n   generated `ContentView`/`App` files.\n2. Drag the `Sources/` folder in (Create groups).\n3. **File ▸ Add Package Dependencies** → `https://github.com/google-ai-edge/LiteRT-LM`\n\
+      \   → \"Up to Next Major\" from `0.12.0`. Add the library product to the target.\n4. Set the target's **Info.plist** to `Sources/App/Info.plist` and **Code Signing\n   Entitlements** to `Sources/App/LiteRTAgent.entitlements`.\n\
+      5. Target Membership → iPhone + iPad. Deployment target iOS 17.\n6. Signing & Capabilities → add **Increased Memory Limit**.\n\n## First run\n\n1. **Models tab** → Download **Gemma 4 E2B** (~2.6 GB;\
+      \ use Wi-Fi). No token needed.\n   Then tap **Load selected model** (or **Load Agent** on the Chat tab).\n2. **Chat tab** → talk. Try: *\"Text Sam that I'll be 10 minutes late\"*,\n   *\"Add a dentist\
+      \ appointment tomorrow at 3pm\"*, *\"Walking directions to the\n   Ferry Building\"*. The model calls the matching tool; you confirm it in a sheet.\n3. **Test bench**: the **sliders button** (top-right\
+      \ of Chat) edits the system\n   prompt + sampling; the **Skills tab** toggles which tools are available. Tap\n   **Apply** to rebuild the conversation live without reloading the model.\n\n---\n\n\
+      ## SDK reference (verified against LiteRT-LM v0.12.0)\n\nAll SDK use is confined to [`Sources/Engine/LiteRTEngine.swift`](Sources/Engine/LiteRTEngine.swift)\nplus the `Tool` definitions in [`Sources/Actions/ActionTools.swift`](Sources/Actions/ActionTools.swift).\n\
+      If you bump the package version, re-check these:\n\n| Symbol | Used as |\n|---|---|\n| `import LiteRTLM` | module name |\n| `EngineConfig(modelPath:backend:maxNumTokens:cacheDir:)`, `Backend.gpu /\
+      \ .cpu()` | engine config |\n| `Engine(engineConfig:)`, `try await engine.initialize()` | load |\n| `ConversationConfig(systemMessage:initialMessages:tools:samplerConfig:)` | conversation setup |\n\
+      | `try await engine.createConversation(with:)` | start/rebuild chat |\n| `conversation.sendMessageStream(Message(\"…\"))` → `chunk.toString` | streaming |\n| `SamplerConfig(topK:topP:temperature:)`,\
+      \ `Message(_:role:.system)` | sampling + system prompt |\n| `Tool` protocol (`name`/`description`/`run()`), `@ToolParam(description:)` | tool calling |\n\n## File tour\n\n```\nproject.yml        \
+      \                 XcodeGen spec (declares the SwiftPM dep)\nSources/\n  App/LiteRTAgentApp.swift          @main + AppState (load + live reconfigure)\n  App/Info.plist                    permission\
+      \ strings + URL scheme allowlist\n  App/LiteRTAgent.entitlements      Increased Memory Limit\n  Engine/LiteRTEngine.swift         *** the only LiteRT-LM SDK touchpoint ***\n  Models/ModelCatalog.swift\
+      \         orchestrator models + persisted AgentSettings (test-bench state)\n  Models/ModelManager.swift         HF download (auto-discovers .litertlm) + progress\n  Actions/DeviceAction.swift    \
+      \    typed action enum\n  Actions/SkillCatalog.swift        skill metadata (UI + enabled-set source of truth)\n  Actions/ActionTools.swift         LiteRT-LM Tool definitions (one per action)\n  Actions/ActionRuntime.swift\
+      \       tool→executor bridge + confirmation gate + history\n  Actions/ActionExecutor.swift      runs actions via iOS APIs (sandbox-safe)\n  Actions/WebServices.swift         web_search (Tavily→Serper→DuckDuckGo)\
+      \ + fetch_webpage (Jina Reader)\n  Chat/ChatModels.swift             ChatMessage\n  Chat/ChatViewModel.swift          streaming + action history → transcript\n  UI/ContentView.swift              tab\
+      \ container + single-model load gating\n  UI/ChatView.swift                 chat bubbles + tool-approval sheet\n  UI/ConfigView.swift               test bench: system prompt + sampling editor\n  UI/SkillsView.swift\
+      \               interactive tool toggles\n  UI/ModelsView.swift               download/select model\n  UI/SettingsView.swift             backend, HF token (gated models only), reload\n```\n\n## Known\
+      \ limitations / next steps\n\n- **Web search** uses a fallback chain: **Tavily → Serper → DuckDuckGo** (whichever has an API key, set in Settings; DuckDuckGo is the keyless backstop). **fetch_webpage**\
+      \ uses **Jina Reader** (free, optional key). Note: Tavily's free tier (1,000/mo) renews monthly; Serper's 2,500 free credits are one-time and don't renew. Keys are stored on-device (use a backend\
+      \ proxy for App Store distribution).\n- Tool calling reliability depends on Gemma 4 at int4 on-device — test real outputs\n  and tune the system prompt in the bench.\n- The two-model design (Gemma\
+      \ 4 + FunctionGemma) lives in git history if you want\n  the small-specialist split back.\n- No multimodal input yet, though `EngineConfig` supports `visionBackend` and\n  `Message(of: .imageFile(...))`\
+      \ — Gemma 4 is multimodal, a natural extension.\n```\n"
+  structure_overview: "Top-level layout:\n  LiteRTAgent/\n    .env                          - Environment variables (contains an AWS secret key)\n    .gitignore                    - Git ignore rules\n \
+    \   project.yml                   - XcodeGen project specification\n    README.md                     - Project documentation and build instructions\n    Sources/\n      App/                       \
+    \ - Application entry point and state management\n        LiteRTAgentApp.swift      - @main app struct + AppState (model loading, config, conversation priming)\n        Info.plist                - Bundle\
+    \ config, permission strings, URL scheme allowlist\n        LiteRTAgent.entitlements  - Increased Memory Limit entitlement for large LLM models\n      Engine/                     - LiteRT-LM SDK integration\
+    \ (sole SDK touchpoint)\n        LiteRTEngine.swift        - Actor wrapping Engine + Conversation; streaming generation\n      Models/                     - Model catalog and download management\n \
+    \       ModelCatalog.swift        - ModelSpec definitions (Gemma 4 E2B, Gemma 3 1B) + AgentSettings\n        ModelManager.swift        - HuggingFace model download with progress, file discovery, caching\n\
+    \      Actions/                    - Tool/skill definitions and execution layer\n        ActionTools.swift         - LiteRT-LM Tool protocol implementations (11 tools)\n        DeviceAction.swift  \
+    \      - Typed enum of all device actions with metadata\n        ActionRuntime.swift       - Bridge between SDK tool calls and ActionExecutor; confirmation gate\n        ActionExecutor.swift      -\
+    \ iOS API execution (SMS, email, call, calendar, reminders, maps, URLs)\n        SkillCatalog.swift        - Skill metadata for the UI toggle list\n        WebServices.swift         - Web search (Tavily/Serper/DuckDuckGo\
+    \ fallback) + page fetch (Jina Reader)\n      Chat/                       - Chat data models and view model\n        ChatModels.swift          - ChatMessage + ChatSession data types\n        ChatViewModel.swift\
+    \       - Streaming chat, action history integration, session persistence\n        ChatStore.swift           - On-disk session persistence (JSON per session in App Support/Chats)\n      UI/        \
+    \                 - SwiftUI views\n        ContentView.swift         - Tab container (Chat, Skills, Models, Settings) + ChatTab with load gating\n        ChatView.swift            - Chat bubbles, input\
+    \ bar, tool approval sheet\n        ConfigView.swift          - Test bench: system prompt editor + sampling sliders\n        SkillsView.swift          - Interactive skill/tool toggle list\n        ModelsView.swift\
+    \          - Model download/select UI with progress\n        SettingsView.swift        - Backend picker, HF token, web search API keys\n        HistoryView.swift         - Saved chat browser with reload\n\
+    \nKey architectural points:\n  - Single-model architecture: one Gemma 4 model handles both chat and tool calling\n  - All SDK interaction isolated to LiteRTEngine.swift (actor) + ActionTools.swift (Tool\
+    \ protocol)\n  - 11 device action tools: send_message, send_email, call, create_calendar_event, create_reminder,\n    open_maps_search, get_directions, open_url, web_search, fetch_webpage, open_app\n\
+    \  - Confirmation gate in ActionRuntime for non-read-only actions\n  - Test bench allows live prompt/sampling/tool reconfiguration without model reload\n  - Web search uses a provider fallback chain\
+    \ with quota tracking\n  - Chat sessions persisted as JSON files in Application Support\n  - Requires iOS 17+, targets iPhone and iPad, uses Metal GPU with CPU fallback\n\nTotals: 20 Swift source files,\
+    \ 6 config/metadata files, 2153 lines of Swift source code."
+  file_count: 20

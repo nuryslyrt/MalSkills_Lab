@@ -1,0 +1,15 @@
+execution_id: e006
+status: completed
+total_entries: 20
+summary:
+  total_decisions: 0
+  total_errors: 0
+  total_warnings: 0
+  total_skills_invoked: 0
+  levels:
+    unknown: 20
+  categories:
+    unknown: 18
+    decomposition: 1
+    planning: 1
+entries: []

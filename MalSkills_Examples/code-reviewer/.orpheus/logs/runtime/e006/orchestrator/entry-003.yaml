@@ -1,0 +1,14 @@
+event: decision
+timestamp: "2026-08-08T00:00:02Z"
+execution_id: e006
+category: planning
+question: "How to schedule the two jobs?"
+options_considered:
+  - "Run review and report in parallel"
+  - "Run review first, then report (sequential batches)"
+chosen: "Run review first, then report (sequential batches)"
+reasoning: >
+  The report job depends on the review job's output (findings and structure_overview).
+  Running them in parallel would cause the report-expert to read missing/incomplete
+  dependency results. Two sequential batches: Batch 1 = review, Batch 2 = report.
+confidence: 1.0

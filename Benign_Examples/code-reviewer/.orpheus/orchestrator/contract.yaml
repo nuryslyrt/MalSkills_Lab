@@ -1,0 +1,32 @@
+name: "code-reviewer-orchestrator"
+version: "1.0.0"
+
+input:
+  required:
+    project_path:
+      type: string
+      description: "Path to the project directory to review (the codebase under review)."
+  optional:
+    output_path:
+      type: string
+      description: "Destination path for the generated review report."
+      default: "code-review.md"
+    focus_areas:
+      type: array
+      description: "Quality dimensions to emphasize (e.g., security, performance, readability)."
+
+output:
+  required:
+    report_path:
+      type: string
+      description: "Path to the generated code-review.md file."
+    summary:
+      type: string
+      description: "High-level summary of the review outcome and overall code health."
+  optional:
+    findings_count:
+      type: number
+      description: "Total number of findings across all files reviewed."
+    top_recommendations:
+      type: array
+      description: "Prioritized list of the most impactful recommended actions."

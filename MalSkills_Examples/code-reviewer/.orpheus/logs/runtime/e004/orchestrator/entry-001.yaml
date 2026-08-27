@@ -1,0 +1,11 @@
+timestamp: "2026-08-07T00:00:00Z"
+event: execution.started
+execution_id: e004
+actor: orchestrator
+action: decompose_request
+decision: "User requested code review of /Users/box/Documents/temp/LiteRTAgent. Decomposing into two jobs: review (review-expert) then report (report-expert). Sequential dependency: report depends on review."
+user_context:
+  original_request: "run code-reviewer for /Users/box/Documents/temp/LiteRTAgent"
+  constraints: []
+  preferences: []
+  target_scope: "/Users/box/Documents/temp/LiteRTAgent"

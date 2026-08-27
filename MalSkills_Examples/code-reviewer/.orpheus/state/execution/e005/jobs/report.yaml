@@ -1,0 +1,17 @@
+job_id: report
+job_type: report
+expert: report-expert
+status: pending
+retry_count: 0
+dependencies:
+  - review
+input:
+  output_path: "code-review.md"
+  dependency_results:
+    review: ".orpheus/state/execution/e005/results/review.yaml"
+user_context:
+  original_request: "run code-reviewer for /Users/box/Documents/temp/LiteRTAgent"
+  constraints: []
+  preferences: []
+  conversation_notes: "User invoked via /orpheus run command"
+  target_scope: "/Users/box/Documents/temp/LiteRTAgent"

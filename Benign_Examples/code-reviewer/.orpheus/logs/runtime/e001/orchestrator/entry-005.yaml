@@ -1,0 +1,10 @@
+event: job.dispatched
+execution_id: e001
+batch: 2
+job_id: report
+expert: report-expert
+depends_on: [review]
+dependency_results:
+  review: ".orpheus/state/execution/e001/results/review.yaml"
+result_path: ".orpheus/state/execution/e001/results/report.yaml"
+output_path: "/Users/box/Documents/temp/LiteRTAgent/code-review.md"

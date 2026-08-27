@@ -1,0 +1,12 @@
+event: analysis.started
+timestamp: "2026-08-08T00:02:00Z"
+execution_id: e006
+message: "Beginning Stage 2 analysis of 20 Swift source files across 5 modules"
+files_count: 20
+modules:
+  - "App (1 file)"
+  - "UI (7 files)"
+  - "Chat (3 files)"
+  - "Models (2 files)"
+  - "Actions (6 files)"
+  - "Engine (1 file)"

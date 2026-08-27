@@ -1,0 +1,13 @@
+job_id: report
+status: success
+skill_name: report-expert
+output:
+  report_path: "/Users/box/Documents/temp/LiteRTAgent/code-review.md"
+  findings_count: 15
+  top_recommendations:
+    - "[High · bug] ChatViewModel.swift:55 — fix streaming transcript corruption by tracking the assistant message by stable id instead of a captured index, so mid-stream action bubbles don't misplace streamed chunks."
+    - "[High · bug] WebServices.swift:137 — percent-encode the target before building the Jina Reader URL (and remove the dead target / _ = target code)."
+    - "[High · bug] ModelManager.swift:145 — validate the download HTTP status before moving the temp file; throw on non-2xx and reject HTML/undersized bodies."
+    - "[Medium · best-practice] Eliminate pervasive URL(string:)! force-unwraps on network/user-controlled strings (ModelManager 66/95, ActionExecutor 145/154, WebServices 59/84) — percent-encode and guard let."
+    - "[Medium · bug] ActionRuntime.swift:20 — properly isolate confirmBeforeActing (mark the type @MainActor) instead of relying on an unenforced main-thread-only invariant."
+    - "[Medium · bug] ModelManager.swift:190 — collapse the double file move into a single move with cleanup on failure to avoid leaked temp files."

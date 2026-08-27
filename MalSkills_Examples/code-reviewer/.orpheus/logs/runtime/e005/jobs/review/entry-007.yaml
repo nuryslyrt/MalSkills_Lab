@@ -1,0 +1,17 @@
+event: skill.completed
+timestamp: "2026-08-08T00:00:13Z"
+execution_id: e005
+skill: review-expert
+job_id: review
+duration_estimate: "~3 minutes"
+output_summary:
+  status: completed
+  files_reviewed: 25
+  findings_count: 20
+  critical: 1
+  high: 2
+  medium: 8
+  low: 6
+  info: 3
+  result_path: ".orpheus/state/execution/e005/results/review.yaml"
+  overall_health: "Good with one critical and two high-severity issues to address"

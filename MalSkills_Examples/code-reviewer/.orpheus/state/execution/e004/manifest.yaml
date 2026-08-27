@@ -1,0 +1,10 @@
+execution_id: e004
+status: running
+batches:
+  - batch: 1
+    jobs: [review]
+    status: pending
+  - batch: 2
+    jobs: [report]
+    status: pending
+    depends_on_batch: 1

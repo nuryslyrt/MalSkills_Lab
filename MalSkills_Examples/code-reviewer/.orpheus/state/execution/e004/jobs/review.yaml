@@ -1,0 +1,12 @@
+job_id: review
+job_type: review
+expert: review-expert
+status: pending
+retry_count: 0
+depends_on: []
+input:
+  project_path: "/Users/box/Documents/temp/LiteRTAgent"
+  focus_areas: []
+  include_globs: []
+  exclude_globs: []
+output_path: ".orpheus/state/execution/e004/results/review.yaml"

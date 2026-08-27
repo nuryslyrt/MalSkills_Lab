@@ -1,0 +1,6 @@
+event: skill.invoked
+timestamp: "2026-08-08T00:01:00Z"
+execution_id: e005
+skill: report-expert
+job_id: report
+message: "Report expert started. Reading job definition and review dependency results."

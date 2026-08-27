@@ -1,0 +1,11 @@
+event: skill.invoked
+timestamp: "2026-08-07T00:00:00Z"
+execution_id: e003
+skill: review-expert
+job_id: review
+message: "review-expert invoked for code review of /Users/box/Documents/temp/LiteRTAgent"
+input:
+  project_path: "/Users/box/Documents/temp/LiteRTAgent"
+  focus_areas: null
+  include_globs: null
+  exclude_globs: null

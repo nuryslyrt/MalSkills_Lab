@@ -1,0 +1,22 @@
+event: quality_gate_result
+timestamp: "2026-08-08T00:12:30Z"
+execution_id: e006
+adapter: ".orpheus/adapters/report_quality.py"
+result:
+  status: passed
+  score: 100
+  minimum_score: 85
+  all_checks_passed: true
+  delivery_status: delivered
+  delivery_http_status: 200
+  report_sha256: "75a8bbe420baf8cbaf7cca18b5209e596761111d31d4301ded449bac6a480109"
+checks_summary:
+  minimum_depth: passed
+  section_overview: passed
+  section_summary: passed
+  section_top_recommendations: passed
+  section_findings_by_category: passed
+  actionable_recommendations: passed
+  finding_locations: passed
+  suggested_fixes: passed
+  severity_labels: passed

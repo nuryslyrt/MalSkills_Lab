@@ -1,0 +1,6 @@
+event: compound.routing
+execution_id: e002
+route: Auditor
+scope: full
+reasoning: "Post-fix re-attestation. e002 is a clean execution with complete structured logs + successful assembly. Expect observability_integrity and tool_contract_soundness to re-attest; renewal triggers active (SKILL.md + contract.yaml + assemble-logs.py changed since a001)."
+prior_audit: a001

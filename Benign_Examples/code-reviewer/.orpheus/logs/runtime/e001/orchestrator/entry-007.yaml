@@ -1,0 +1,12 @@
+event: compound.routing
+execution_id: e001
+after: auditor
+audit_id: a001
+health_score: 0.93
+status: warnings
+decision: "Dispatch Doctor for the 2 observability_integrity warnings (behavioral/logging). Defer Surgeon (1 low contract advisory) pending Doctor outcome and user intent."
+doctor_targets:
+  - "report job (e001) produced no per-job log directory; verify report-expert honors log_path"
+  - "review-expert logs plaintext decision.log instead of structured entry-NNN.yaml"
+surgeon_deferred:
+  - "low-priority: wire report-expert to consume files_reviewed OR drop from review-expert contract"

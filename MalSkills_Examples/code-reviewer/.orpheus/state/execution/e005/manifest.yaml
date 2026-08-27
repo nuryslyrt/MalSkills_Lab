@@ -1,0 +1,16 @@
+execution_id: e005
+status: completed
+batches:
+  - batch: 1
+    jobs: [review]
+    status: completed
+  - batch: 2
+    jobs: [report]
+    status: completed
+    depends_on: [1]
+dependency_graph:
+  review: []
+  report: [review]
+total_jobs: 2
+completed_jobs: 2
+failed_jobs: 0

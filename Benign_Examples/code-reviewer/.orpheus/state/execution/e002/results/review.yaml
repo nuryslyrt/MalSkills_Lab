@@ -1,0 +1,480 @@
+job_id: review
+status: completed
+skill_name: review-expert
+output:
+  structure_overview: |
+    LiteRTAgent is a SwiftUI iOS/iPad app (deployment target iOS 17, Swift 5.9,
+    project generated via XcodeGen from project.yml) that runs a Gemma model
+    on-device using Google's LiteRT-LM Swift SDK and exposes device "skills"
+    (messaging, email, calls, calendar, reminders, maps, web search/fetch, app
+    launch) to the model as tool calls. It is a single-target app with a clean,
+    layered structure:
+
+    - Sources/App: App entry point (LiteRTAgentApp) and AppState — the central
+      @MainActor ObservableObject that loads the model, configures the
+      conversation (system prompt + sampler + tools + history), and handles
+      GPU->CPU fallback. Plus Info.plist (permission strings, LSApplication
+      QueriesSchemes) and entitlements (increased-memory-limit).
+    - Sources/Engine: LiteRTEngine — the only file that imports LiteRTLM. An
+      actor wrapping Engine/Conversation with streaming generation.
+    - Sources/Models: ModelCatalog (ModelSpec + AgentSettings persistence) and
+      ModelManager (HuggingFace discovery + delegate-based file download).
+    - Sources/Actions: The tool/action layer. DeviceAction (the action enum),
+      ActionTools (LiteRTLM Tool conformances), ActionRuntime (shared bridge
+      with confirmation gate + history), ActionExecutor (Apple-API execution),
+      SkillCatalog (skill metadata), WebServices (search/fetch providers).
+    - Sources/Chat: ChatModels (ChatMessage/ChatSession), ChatStore (per-session
+      JSON persistence), ChatViewModel (streaming + action bubble surfacing).
+    - Sources/UI: SwiftUI views — ContentView (TabView), ChatView, ConfigView
+      (test bench), ModelsView, SettingsView, HistoryView, SkillsView.
+
+    Architecture is generally idiomatic modern Swift: actors for the engine,
+    @MainActor isolation for UI-facing state, Combine for the action history
+    stream, value-type tools decoded by the SDK reaching a shared runtime. The
+    separation of DeviceAction (pure data) from ActionExecutor (side effects) is
+    a strong point. Main risks cluster around the singleton ActionRuntime (global
+    mutable state, no per-conversation isolation), URL construction using
+    force-unwraps, and a couple of concurrency/threading subtleties.
+
+  files_reviewed:
+    - Sources/App/LiteRTAgentApp.swift
+    - Sources/App/Info.plist
+    - Sources/App/LiteRTAgent.entitlements
+    - Sources/Engine/LiteRTEngine.swift
+    - Sources/Models/ModelCatalog.swift
+    - Sources/Models/ModelManager.swift
+    - Sources/Actions/DeviceAction.swift
+    - Sources/Actions/ActionTools.swift
+    - Sources/Actions/ActionRuntime.swift
+    - Sources/Actions/ActionExecutor.swift
+    - Sources/Actions/SkillCatalog.swift
+    - Sources/Actions/WebServices.swift
+    - Sources/Chat/ChatModels.swift
+    - Sources/Chat/ChatStore.swift
+    - Sources/Chat/ChatViewModel.swift
+    - Sources/UI/ContentView.swift
+    - Sources/UI/ChatView.swift
+    - Sources/UI/ConfigView.swift
+    - Sources/UI/ModelsView.swift
+    - Sources/UI/SettingsView.swift
+    - Sources/UI/HistoryView.swift
+    - Sources/UI/SkillsView.swift
+    - project.yml
+
+  findings_count: 27
+
+  findings:
+    # ---------- WebServices.swift ----------
+    - file: Sources/Actions/WebServices.swift
+      line: 137
+      category: bug
+      severity: high
+      description: >
+        fetchWebpage builds the Jina Reader URL by string concatenation:
+        URL(string: "https://r.jina.ai/\(normalized)"). If `normalized` contains
+        characters that are illegal in a URL (spaces, unencoded query params,
+        Unicode), URL(string:) returns nil and the fetch fails; worse, an
+        attacker-influenced model output could inject path/query segments. The
+        raw URL is not percent-encoded before being appended to the reader host.
+      suggested_fix: >
+        Percent-encode the target URL before embedding it, or use
+        URLComponents to construct "https://r.jina.ai/" with the target appended
+        as an already-encoded path. Validate the target is http(s) first and
+        reject other schemes to avoid SSRF-style abuse of the reader endpoint.
+    - file: Sources/Actions/WebServices.swift
+      line: 140
+      category: readability
+      severity: low
+      description: >
+        `let target = URL(...)` is computed and immediately discarded via
+        `_ = target`. The guard validates it parses but the value is unused,
+        leaving dead-ish code that signals an incomplete refactor.
+      suggested_fix: >
+        Either use `target` (e.g. to enforce target.scheme is http/https) or drop
+        the binding and validate the normalized string directly. Remove the
+        `_ = target` line.
+    - file: Sources/Actions/WebServices.swift
+      line: 176
+      category: bug
+      severity: medium
+      description: >
+        monthKey() creates a new DateFormatter on every call without setting a
+        fixed locale. DateFormatter with format "yyyy-MM" can be affected by the
+        user's calendar/locale (e.g. non-Gregorian calendars), yielding
+        unexpected keys and mis-bucketed usage counts across the month boundary.
+      suggested_fix: >
+        Set formatter.locale = Locale(identifier: "en_US_POSIX") and
+        formatter.calendar = Calendar(identifier: .gregorian). Consider caching a
+        single static formatter instead of allocating per call.
+    - file: Sources/Actions/WebServices.swift
+      line: 179
+      category: bug
+      severity: medium
+      description: >
+        bumpUsage does a non-atomic read-modify-write on UserDefaults
+        (integer(forKey:) then set). WebServices is a stateless enum with static
+        methods callable from concurrent Tasks; two concurrent searches to the
+        same provider can lose an increment. Not corrupting, but counts drift.
+      suggested_fix: >
+        Serialize usage mutation (e.g. an actor or a dedicated serial queue), or
+        accept the approximation and document it (a comment already calls counts
+        "approximate", so low priority — but note the race explicitly).
+    - file: Sources/Actions/WebServices.swift
+      line: 148
+      category: best-practice
+      severity: low
+      description: >
+        Jina Reader response is decoded as UTF-8 and truncated to 4000
+        characters by Swift String count (grapheme clusters). This is fine for
+        display, but truncating mid-content can cut a code block/table and the
+        4000 constant is a magic number duplicated conceptually with model
+        context limits.
+      suggested_fix: >
+        Extract the cap to a named constant (e.g. maxFetchedChars) and add a note
+        that it should stay well under the model's context window. Optionally
+        truncate on a word/line boundary.
+
+    # ---------- ModelManager.swift ----------
+    - file: Sources/Models/ModelManager.swift
+      line: 67
+      category: bug
+      severity: high
+      description: >
+        The download remote URL is force-unwrapped:
+        URL(string: ".../resolve/main/\(filename)?download=true")!. `filename`
+        comes from the HuggingFace API (external data). A filename containing
+        spaces or other URL-illegal characters makes URL(string:) return nil and
+        crashes the app via the force-unwrap inside a Task.
+      suggested_fix: >
+        Percent-encode `filename` (path-allowed set) and use URLComponents or a
+        guard-let with a thrown ModelError instead of `!`. Same applies to the
+        HF API URL at line 95 which interpolates `repo`.
+    - file: Sources/Models/ModelManager.swift
+      line: 26
+      category: bug
+      severity: medium
+      description: >
+        `tasks: [String: URLSessionDownloadTask]` is declared and never read or
+        written anywhere. Downloads actually run through the separate
+        FileDownloader class, so there is no way to cancel an in-flight download
+        and this dictionary is dead state that implies a cancel feature that
+        doesn't exist.
+      suggested_fix: >
+        Either remove `tasks` entirely, or wire real cancellation: have
+        FileDownloader expose its URLSessionDownloadTask and store/cancel it
+        (e.g. on delete()). Deleting a spec mid-download currently does not stop
+        the transfer.
+    - file: Sources/Models/ModelManager.swift
+      line: 78
+      category: bug
+      severity: medium
+      description: >
+        delete(_:) removes the model folder but does not cancel an in-progress
+        download for that spec. If the user deletes while downloading, the
+        download completes and moveItem re-creates the file, resurrecting the
+        "deleted" model and leaving status inconsistent.
+      suggested_fix: >
+        Track and cancel the active download task in delete() before removing the
+        folder, and guard the completion path against a cancelled/deleted spec.
+    - file: Sources/Models/ModelManager.swift
+      line: 36
+      category: bug
+      severity: low
+      description: >
+        modelsRoot (and ChatStore.dir) call fm.urls(for:in:)[0] with an
+        unchecked subscript. On the rare platform/config where the array is
+        empty this crashes. Also try? on createDirectory silently swallows
+        failures, so a later write fails with a less clear error.
+      suggested_fix: >
+        Use fm.url(for:in:appropriateFor:create:) which returns a single URL and
+        throws, or guard the array. Surface directory-creation errors rather than
+        discarding with try?.
+    - file: Sources/Models/ModelManager.swift
+      line: 58
+      category: complexity
+      severity: low
+      description: >
+        download() computes status[spec.id] != .downloaded as a guard, but the
+        Retry buttons in ModelsView call download() again on a .failed status.
+        The flow works, yet the state machine (notDownloaded/downloading/
+        downloaded/failed) transitions are spread across ModelManager and the
+        view with no single validation of allowed transitions.
+      suggested_fix: >
+        Centralize state transitions in ModelManager (e.g. a retry() that resets
+        to notDownloaded then downloads) so the view doesn't reason about
+        allowed states.
+    - file: Sources/Models/ModelManager.swift
+      line: 141
+      category: best-practice
+      severity: low
+      description: >
+        FileDownloader creates a fresh URLSession per download and invalidates it
+        on completion — good — but progress callbacks hop to @MainActor for every
+        didWriteData tick (potentially thousands/sec for multi-GB files), each
+        publishing a @Published change and re-rendering the row.
+      suggested_fix: >
+        Throttle progress updates (e.g. only publish when the rounded percent
+        changes, or every N ms) to avoid excessive main-thread churn and
+        SwiftUI invalidations during large downloads.
+
+    # ---------- ActionRuntime.swift ----------
+    - file: Sources/Actions/ActionRuntime.swift
+      line: 10
+      category: complexity
+      severity: high
+      description: >
+        ActionRuntime is a global singleton (static shared) holding mutable
+        @Published state (pendingApproval, history) and confirmBeforeActing set
+        from AppState. Tools reach it via the singleton because the SDK
+        instantiates them by decoding. This couples every tool to one global,
+        prevents having more than one live conversation/agent, complicates
+        testing (no injection), and makes the approval flow implicitly
+        single-conversation.
+      suggested_fix: >
+        Keep the singleton if the SDK truly forces it, but isolate the coupling:
+        route through a protocol so tests can substitute a mock, and document the
+        single-active-conversation assumption. Consider a task-local or
+        per-conversation context id to disambiguate approvals.
+    - file: Sources/Actions/ActionRuntime.swift
+      line: 9
+      category: bug
+      severity: medium
+      description: >
+        ActionRuntime is a plain final class (not @MainActor), yet its
+        @Published properties (pendingApproval, history) are mutated from
+        @MainActor methods AND `confirmBeforeActing` is a non-isolated var read
+        via MainActor.run and written from AppState.configure on the main actor.
+        The mixed isolation of a non-Sendable ObservableObject accessed across
+        actors is fragile under Swift concurrency checking and can race on
+        confirmBeforeActing.
+      suggested_fix: >
+        Annotate ActionRuntime @MainActor (its published state is UI-facing), and
+        remove the manual MainActor.run in shouldConfirm(). Perform the whole
+        perform() flow with clear main-actor isolation for state, awaiting the
+        executor as needed.
+    - file: Sources/Actions/ActionRuntime.swift
+      line: 44
+      category: readability
+      severity: low
+      description: >
+        The 280-character transcript trim is duplicated in concept with
+        ChatViewModel and the record `detail` vs the full modelText returned to
+        the model. The two truncation lengths (280 here) and the display logic
+        are magic numbers.
+      suggested_fix: >
+        Extract truncation into a small helper (e.g. String.truncated(to:)) and
+        name the 280 constant to make the transcript-vs-model distinction
+        explicit.
+
+    # ---------- ActionExecutor.swift ----------
+    - file: Sources/Actions/ActionExecutor.swift
+      line: 140
+      category: bug
+      severity: medium
+      description: >
+        openMapsSearch uses the completion-handler MKLocalSearch API inside a
+        @MainActor method but the completion closure captures and calls
+        UIApplication/item.openInMaps without hopping back to the main actor
+        explicitly. MapKit delivers this callback on an arbitrary queue; touching
+        UIApplication.shared.open off the main thread is a UIKit threading
+        violation.
+      suggested_fix: >
+        Wrap the UI work in the completion in MainActor.assumeIsolated or
+        DispatchQueue.main.async, or switch to the async MKLocalSearch.start()
+        and await it within the actor-isolated context.
+    - file: Sources/Actions/ActionExecutor.swift
+      line: 30
+      category: bug
+      severity: medium
+      description: >
+        call() dials tel://\(digits(number)). digits() strips everything except
+        digits and '+'. If the model passes a non-numeric string (e.g. a contact
+        name, which the tool description explicitly permits: "Recipient name or
+        phone number" for messages, and CallTool takes a "number") digits()
+        yields an empty string and the app attempts to open "tel://" — a no-op or
+        failure with no contact resolution. There is no Contacts lookup despite
+        NSContactsUsageDescription being declared.
+      suggested_fix: >
+        Either implement Contacts resolution (the Info.plist already declares the
+        permission and comments claim name lookup) or validate that the number is
+        non-empty after filtering and return .failed with a clear message when it
+        isn't. Align tool descriptions with actual capability.
+    - file: Sources/Actions/ActionExecutor.swift
+      line: 71
+      category: best-practice
+      severity: low
+      description: >
+        The mailto: fallback interpolates raw `to` (unencoded) while subject/body
+        are percent-encoded. An address containing spaces or special chars yields
+        a malformed mailto URL.
+      suggested_fix: >
+        Percent-encode the recipient too (or validate it), and construct the URL
+        with URLComponents/queryItems rather than manual string interpolation.
+    - file: Sources/Actions/ActionExecutor.swift
+      line: 97
+      category: bug
+      severity: low
+      description: >
+        Event end date is start + minutes*60 with no validation that minutes is
+        positive. The model can pass 0 or a negative durationMinutes (the tool
+        defaults to 60 but the model may override), producing a zero/negative-
+        length event.
+      suggested_fix: >
+        Clamp minutes to a sane minimum (e.g. max(1, minutes)) before computing
+        endDate, and/or validate in the tool decode path.
+    - file: Sources/Actions/ActionExecutor.swift
+      line: 182
+      category: complexity
+      severity: low
+      description: >
+        topViewController() walks connectedScenes/windows to find something to
+        present on. This UIKit presentation from a SwiftUI app is brittle (fails
+        with multiple windows/scenes on iPad, or if no foregroundActive scene
+        exists) and silently no-ops (present() on nil) leaving the model told a
+        composer was "presented" when nothing appeared.
+      suggested_fix: >
+        Present composers via SwiftUI (e.g. a sheet driven by ActionRuntime
+        state, like ApprovalSheet) instead of imperative UIKit presentation, or
+        return .failed when topViewController() is nil so the model/user learns
+        it failed.
+
+    # ---------- LiteRTEngine.swift ----------
+    - file: Sources/Engine/LiteRTEngine.swift
+      line: 84
+      category: bug
+      severity: medium
+      description: >
+        stream() spawns an unstructured Task inside AsyncThrowingStream and never
+        stores it, so if the consumer cancels the stream (e.g. user starts a new
+        chat mid-generation) the Task/underlying sendMessageStream is not
+        cancelled. Generation keeps running against the single-session engine,
+        which can collide with a subsequent configureConversation.
+      suggested_fix: >
+        Use continuation.onTermination to cancel the Task, and check
+        Task.isCancelled in the loop. Given the actor allows only one session,
+        ensure a new send can't start until the prior stream is torn down.
+    - file: Sources/Engine/LiteRTEngine.swift
+      line: 38
+      category: readability
+      severity: info
+      description: >
+        experimentalSetup is a static let used purely for its side effects, read
+        via `_ = Self.experimentalSetup` in init. This lazy-once idiom is clever
+        but non-obvious; a reader may not realize the assignment triggers global
+        SDK flag mutation.
+      suggested_fix: >
+        Keep the once-only behavior but add an explicit function name, e.g.
+        enableConstrainedDecodingOnce(), or a comment at the call site explaining
+        the `_ =` forces one-time evaluation.
+
+    # ---------- ChatViewModel.swift / ChatStore.swift ----------
+    - file: Sources/Chat/ChatViewModel.swift
+      line: 33
+      category: bug
+      severity: medium
+      description: >
+        The ViewModel subscribes to ActionRuntime.shared.$history (a global) and
+        appends the last record to *this* conversation. Because history is
+        global and append-only, a new ChatViewModel (new session) that starts
+        while an action from a previous session is still resolving, or any action
+        triggered by another conversation, would surface in the wrong chat. There
+        is no correlation of an ActionRecord to a session.
+      suggested_fix: >
+        Tag ActionRecords with the originating session id (or clear/scope history
+        per conversation) and filter the subscription by the current sessionID,
+        so action bubbles only appear in the chat that caused them.
+    - file: Sources/Chat/ChatViewModel.swift
+      line: 62
+      category: bug
+      severity: low
+      description: >
+        During streaming, chunks are appended to messages[assistantIndex] guarded
+        by indices.contains. If a tool executes mid-stream it appends an .action
+        message (via the history sink), shifting no indices (append is at end) —
+        OK — but persist() is called on every action while streaming, writing
+        partial assistant text to disk repeatedly. Frequent disk writes per token
+        stream on large transcripts.
+      suggested_fix: >
+        Debounce/throttle persist() during active generation (persist once on
+        completion and on action commit), rather than on every history event.
+    - file: Sources/Chat/ChatStore.swift
+      line: 84
+      category: bug
+      severity: low
+      description: >
+        loadAll() uses Data(contentsOf:) synchronously on the main actor (init)
+        and try? silently drops any session file that fails to decode (e.g. a
+        schema change). Corrupt/legacy files vanish with no user feedback, and
+        loading many/large session files blocks app launch on the main thread.
+      suggested_fix: >
+        Load sessions off the main actor (Task/background) and log or surface
+        decode failures instead of silently discarding, or migrate legacy schemas
+        explicitly.
+
+    # ---------- ModelCatalog.swift ----------
+    - file: Sources/Models/ModelCatalog.swift
+      line: 76
+      category: best-practice
+      severity: low
+      description: >
+        AgentSettings.load() decodes ModelSpec-embedded settings from
+        UserDefaults keyed "AgentSettings.v2". Because the persisted orchestrator
+        is a full ModelSpec snapshot, if the catalog's spec changes (repo, size,
+        hint) a user keeps the stale embedded copy indefinitely with no
+        reconciliation against ModelCatalog.all.
+      suggested_fix: >
+        Persist only the orchestrator id and resolve against ModelCatalog.all on
+        load (falling back to default if the id is gone), so catalog edits
+        propagate to existing installs.
+
+    # ---------- Config / project.yml ----------
+    - file: project.yml
+      line: 32
+      category: best-practice
+      severity: info
+      description: >
+        The SwiftPM dependency product name is marked "VERIFY" with candidate
+        names in a comment, and the package is pinned to a raw revision SHA with
+        a note that tag resolution fails. This is a known-fragile external dep
+        that will silently break the build if the product name is wrong or the
+        LFS repo state changes.
+      suggested_fix: >
+        Once verified, remove the VERIFY comment and document the confirmed
+        product name; consider vendoring or mirroring the pinned revision to
+        insulate the build from upstream LFS/tag issues.
+    - file: Sources/App/Info.plist
+      line: 48
+      category: best-practice
+      severity: info
+      description: >
+        LSApplicationQueriesSchemes whitelists tel/sms/mailto/maps/http/https but
+        OpenAppTool lets the model open arbitrary URL schemes (e.g. music://).
+        canOpenURL for a scheme not in this list returns false, so many
+        legitimate app-open requests will be reported as "Can't open app" even
+        though the intent is valid — inconsistent capability vs. advertised skill.
+      suggested_fix: >
+        Either broaden the query-schemes list to the app schemes you intend to
+        support, or set the open_app skill's expectations (and its example) to the
+        whitelisted set, and handle the canOpenURL-false case with a clearer
+        message.
+
+  summary: >
+    LiteRTAgent is a well-organized, idiomatic SwiftUI on-device LLM agent with a
+    clean separation between pure action data (DeviceAction), SDK tool
+    conformances (ActionTools), a runtime bridge (ActionRuntime), and Apple-API
+    execution (ActionExecutor). Documentation comments are unusually good and
+    explain non-obvious SDK constraints. The most important issues are: (1)
+    several force-unwrapped/unencoded URL constructions built from external data
+    (HuggingFace filenames, model-supplied URLs) that can crash or be abused
+    (ModelManager line 67, WebServices line 137); (2) concurrency/threading
+    hazards — an uncancellable streaming Task in LiteRTEngine, a mixed-isolation
+    non-@MainActor ActionRuntime singleton, and an off-main-thread MapKit
+    completion touching UIKit; (3) the global ActionRuntime singleton and global
+    action-history feed that can surface actions in the wrong chat session and
+    blocks multi-conversation/testability; and (4) dead state (ModelManager.tasks)
+    implying a download-cancel feature that doesn't exist, so deleting a model
+    mid-download resurrects it. No critical security holes given iOS sandboxing
+    and the user-confirmation gate, but the URL-injection/force-unwrap items and
+    the mismatch between advertised skills (Contacts lookup, arbitrary app open)
+    and actual behavior should be addressed. 27 findings: 0 critical, 5 high,
+    10 medium, 8 low, 4 info.

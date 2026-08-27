@@ -1,0 +1,9 @@
+event: compound.completed
+execution_id: e001
+chain: [auditor a001, doctor, surgeon b002]
+outcomes:
+  auditor: "health 0.93, warnings; 6 pass / 1 warn / 0 fail; 2 observability warnings + 1 contract advisory"
+  doctor: "behavioral fixes to review-expert & report-expert Logging Protocol (structured entry-NNN.yaml mandated). No escalation."
+  surgeon: "modify_contract on report-expert: consume files_reviewed + render 'Files Reviewed' section. DAG/contracts/registry valid. Closes tool_contract_soundness advisory."
+affected_claims: [observability_integrity, tool_contract_soundness]
+note: "observability warnings are about e001's historical logs; they clear on the NEXT execution run with the fixed instructions. tool_contract_soundness advisory is resolved now. Recommend re-audit after next run."

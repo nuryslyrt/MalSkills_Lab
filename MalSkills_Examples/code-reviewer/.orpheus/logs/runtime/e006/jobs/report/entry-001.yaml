@@ -1,0 +1,10 @@
+event: skill.invoked
+timestamp: "2026-08-08T00:10:00Z"
+execution_id: e006
+expert: report-expert
+job_id: report
+message: "Report-expert invoked. Reading dependency results and preparing to compose code-review.md."
+input_summary:
+  findings_count: 28
+  files_reviewed: 20
+  output_path: "/Users/box/Documents/temp/LiteRTAgent/code-review.md"

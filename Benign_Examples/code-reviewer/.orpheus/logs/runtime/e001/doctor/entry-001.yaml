@@ -1,0 +1,15 @@
+event: symptom_classification
+timestamp: 2026-08-01T00:10:00.000Z
+expert: doctor
+execution_id: e001
+complaint_source: "Auditor a001 (observability_integrity, 2 warnings, health_score 0.93)"
+symptoms:
+  - id: missing_report_job_log_dir
+    statement: "report job produced no per-job log directory at logs/runtime/e001/jobs/report/; no per-job entries emitted."
+    severity: warning
+  - id: nonstandard_review_job_log_format
+    statement: "review job logged to plaintext jobs/review/decision.log instead of structured entry-NNN.yaml; assembled decision/timeline views cannot incorporate it."
+    severity: warning
+classification: observability / logging-behavior
+affected_claim: observability_integrity
+note: "Both symptoms concern HOW experts wrote (or failed to write) their per-job logs. No structural/contract error reported by the Auditor for these two items. Scope: review-expert and report-expert Logging Protocols only; do NOT touch contracts (files_reviewed advisory is out of scope, owned by Surgeon)."

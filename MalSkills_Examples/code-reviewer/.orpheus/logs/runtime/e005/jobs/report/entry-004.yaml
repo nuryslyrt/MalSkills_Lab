@@ -1,0 +1,17 @@
+event: report_written
+timestamp: "2026-08-08T00:01:30Z"
+execution_id: e005
+report_path: "/Users/box/Documents/temp/LiteRTAgent/code-review.md"
+report_bytes: 24220
+findings_rendered: 20
+sections:
+  - "Overview"
+  - "Files Reviewed"
+  - "Summary"
+  - "Top Recommendations"
+  - "Findings by Category"
+categories_rendered:
+  - "Best Practice (8 findings)"
+  - "Bug (4 findings)"
+  - "Complexity (3 findings)"
+  - "Readability (5 findings)"

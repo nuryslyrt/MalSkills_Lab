@@ -1,0 +1,14 @@
+event: decision
+timestamp: "2026-08-07T00:00:01Z"
+execution_id: e003
+category: complexity_assessment
+question: "Should file collection be delegated to source-reader-worker or handled directly?"
+options_considered:
+  - "Delegate to source-reader-worker — standard practice, keeps concerns separated"
+  - "Read files directly — project is only ~17 Swift files, trivially small"
+chosen: "Delegate to source-reader-worker"
+reasoning: >
+  Although the project is small (~17 Swift source files plus config), delegating to the
+  worker follows the protocol default and ensures consistent file inventory, language
+  detection, and structure overview. The overhead is minimal.
+confidence: 0.95

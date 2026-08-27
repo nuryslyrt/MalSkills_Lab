@@ -1,0 +1,7 @@
+event: skill.invoked
+timestamp: 2026-08-01T00:00:00Z
+execution_id: e002
+skill: review-expert
+job_id: review
+project_path: /Users/box/Documents/temp/LiteRTAgent
+note: "First action per updated Logging Protocol. Guarantees per-job log dir exists."

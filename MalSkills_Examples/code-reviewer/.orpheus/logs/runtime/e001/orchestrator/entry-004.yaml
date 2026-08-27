@@ -1,0 +1,7 @@
+event: job.result_received
+execution_id: e001
+job_id: review
+status: success
+result_path: ".orpheus/state/execution/e001/results/review.yaml"
+summary: "21 files reviewed (20 Swift + project.yml), 15 findings (0 critical, 3 high, 4 medium, 6 low, 2 info). Contract fields present: findings, structure_overview, files_reviewed, findings_count, summary."
+contract_check: passed

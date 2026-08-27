@@ -1,0 +1,9 @@
+event: collection.completed
+timestamp: 2026-08-01T00:05:00Z
+execution_id: e002
+job_id: review
+method: "Direct read via Glob/Read (no worker dispatched)"
+files_collected:
+  swift: 20
+  config: ["project.yml", "Sources/App/Info.plist", "Sources/App/LiteRTAgent.entitlements"]
+note: "All 20 Swift files plus build/config files read in full. Gather phase complete; analysis follows."

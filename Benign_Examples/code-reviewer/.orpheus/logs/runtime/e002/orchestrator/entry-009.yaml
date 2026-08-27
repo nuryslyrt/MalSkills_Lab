@@ -1,0 +1,6 @@
+event: execution.finalized
+execution_id: e002
+status: completed
+log_assembly: success
+doctor_fix: "scripts/assemble-logs.py get_ts normalized to offset-aware UTC; re-run assembled 22 entries."
+affected_claims: [observability_integrity]

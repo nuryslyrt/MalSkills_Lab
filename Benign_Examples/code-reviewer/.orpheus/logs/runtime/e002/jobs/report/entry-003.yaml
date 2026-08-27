@@ -1,0 +1,22 @@
+event: organization.decision
+timestamp: 2026-08-01T00:02:00Z
+execution_id: e002
+job_id: report
+question: How should the 27 findings be organized and prioritized in the report?
+options_considered:
+  - option: Group by file, then severity
+    note: Matches source grouping but scatters same-category issues; harder to scan by type.
+  - option: Group by category (readability, bug, complexity, best-practice); within each order by severity critical->high->medium->low->info
+    note: Matches skill contract; makes recurring issue types visible.
+chosen: Group by category; within each order by severity
+reasoning: >
+  Skill definition mandates category grouping with severity ordering. Top
+  recommendations derived from the 5 high-severity findings (URL force-unwrap
+  crash, URL injection in Jina fetch, global ActionRuntime singleton coupling)
+  plus recurring themes (unencoded/force-unwrapped URLs from external data,
+  concurrency/threading isolation, cross-session action leakage, dead
+  download-cancel state).
+findings_count: 27
+severity_breakdown: {critical: 0, high: 5, medium: 10, low: 8, info: 4}
+categories: [bug, complexity, readability, best-practice]
+confidence: high

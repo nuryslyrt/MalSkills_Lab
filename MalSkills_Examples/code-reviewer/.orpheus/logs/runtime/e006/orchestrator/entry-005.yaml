@@ -1,0 +1,16 @@
+event: job.completed
+timestamp: "2026-08-08T00:05:17Z"
+execution_id: e006
+batch_id: 1
+job_id: review
+expert: review-expert
+status: completed
+duration_seconds: 317
+output_summary:
+  findings_count: 28
+  high_severity: 3
+  medium_severity: 7
+  low_severity: 8
+  info_severity: 10
+  files_reviewed: 20
+  overall_assessment: "Well-structured codebase. No critical bugs. Primary concerns are security (key storage), resilience (error swallowing, download atomicity), and concurrency edge cases."
